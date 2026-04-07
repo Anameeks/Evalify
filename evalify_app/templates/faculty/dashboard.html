@@ -1,0 +1,86 @@
+{% extends 'faculty/base.html' %}
+{% block nav_dashboard %}active{% endblock %}
+{% block content %}
+
+<div class="page-title">Faculty Dashboard</div>
+<div class="page-sub">Overview of your courses and CLO/PLO assessments</div>
+
+<div class="stats">
+  <div class="stat blue">
+    <div>
+      <div class="stat-label">Active Courses</div>
+      <div class="stat-val">{{ courses.count }}</div>
+    </div>
+    <div class="stat-icon"></div>
+  </div>
+  <div class="stat white">
+    <div>
+      <div class="stat-label">Assessments</div>
+      <div class="stat-val">{{ assessments_count }}</div>
+    </div>
+    <div class="stat-icon" style="color:#9ca3af;"></div>
+  </div>
+  <div class="stat orange">
+    <div>
+      <div class="stat-label">Pending Grading</div>
+      <div class="stat-val">{{ pending_count }}</div>
+      {% if pending_count > 0 %}<div class="stat-sub">Requires attention</div>{% endif %}
+    </div>
+    <div class="stat-icon"></div>
+  </div>
+  <div class="stat red">
+    <div>
+      <div class="stat-label">Flagged</div>
+      <div class="stat-val">{{ flagged_count }}</div>
+    </div>
+    <div class="stat-icon"></div>
+  </div>
+</div>
+
+<div class="two-col">
+
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">Recent Submissions</div>
+      <a href="{% url 'faculty_grading' %}" class="panel-link">View All</a>
+    </div>
+    {% for sub in recent_submissions %}
+    <div class="sub-row">
+      <div class="sub-avatar {{ sub.status }}">
+        {% if sub.status == 'graded' %}✓{% elif sub.status == 'flagged' %}⚠{% else %}⏳{% endif %}
+      </div>
+      <div class="sub-info">
+        <div class="sub-name">{{ sub.student.full_name|default:sub.student.username }}</div>
+        <div class="sub-course">{{ sub.assessment.title }}</div>
+      </div>
+      {% if sub.plagiarism_score > 30 %}
+      <span class="tag tag-similar">{{ sub.plagiarism_score|floatformat:0 }}% similar</span>
+      {% endif %}
+      <span class="tag tag-{{ sub.status }}">{{ sub.status }}</span>
+    </div>
+    {% empty %}
+    <div style="text-align:center;padding:30px;color:#9ca3af;font-size:14px;">No submissions yet</div>
+    {% endfor %}
+  </div>
+
+
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">Announcements</div>
+      <a href="{% url 'faculty_announcements' %}" class="panel-link">Manage</a>
+    </div>
+    {% for ann in announcements %}
+    <div class="ann-row">
+      <div class="ann-dot {{ ann.priority }}"></div>
+      <div>
+        <div class="ann-title">{{ ann.title }}</div>
+        <div class="ann-preview">{{ ann.content|truncatechars:60 }}</div>
+      </div>
+    </div>
+    {% empty %}
+    <div style="text-align:center;padding:30px;color:#9ca3af;font-size:14px;">No announcements yet</div>
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}

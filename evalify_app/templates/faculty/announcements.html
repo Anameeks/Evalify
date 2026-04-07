@@ -1,0 +1,128 @@
+{% extends 'faculty/base.html' %}
+{% block nav_announcements %}active{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;">
+  <div>
+    <div class="page-title">Announcements</div>
+    <div class="page-sub">Broadcast alerts to students</div>
+  </div>
+  <button class="btn btn-primary" onclick="openModal('newAnnModal')">+ New Announcement</button>
+</div>
+
+<!-- Announcement List -->
+{% for ann in announcements %}
+<div class="list-item" id="ann{{ ann.id }}">
+  <div class="list-icon {% if ann.priority == 'high' %}red{% elif ann.priority == 'medium' %}orange{% else %}teal{% endif %}">
+  </div>
+  <div class="list-body">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+      <div class="list-title">{{ ann.title }}</div>
+      <span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">
+        {{ ann.course.code }}
+      </span>
+      <span class="tag tag-{{ ann.priority }}">{{ ann.priority|title }}</span>
+    </div>
+    <div class="list-meta">{{ ann.content }}</div>
+    <div style="font-size:11px;color:#9ca3af;margin-top:4px;">{{ ann.created_at|date:"Y-m-d" }}</div>
+  </div>
+  <button onclick="deleteAnn({{ ann.id }})"
+    style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;flex-shrink:0;">
+    🗑 Delete
+  </button>
+</div>
+{% empty %}
+<div class="empty">
+  <div class="empty-title">No announcements yet</div>
+  <p style="font-size:13px;">Click "+ New Announcement" to notify your students.</p>
+</div>
+{% endfor %}
+
+
+<!--New Announcement-->
+<div class="modal-overlay" id="newAnnModal">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-head">
+      <div class="modal-title">New Announcement</div>
+      <button class="modal-close" onclick="closeModal('newAnnModal')">×</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="form-group">
+        <label class="form-label">Course *</label>
+        <select id="annCourse" class="form-control">
+          <option value="">Select a course...</option>
+          {% for c in courses %}
+          <option value="{{ c.id }}">{{ c.code }}: {{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Title *</label>
+        <input type="text" id="annTitle" class="form-control" placeholder="e.g. Midterm Exam Schedule">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Content *</label>
+        <textarea id="annContent" class="form-control" style="min-height:110px;"
+          placeholder="Write your announcement here..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Priority</label>
+        <select id="annPriority" class="form-control">
+          <option value="high">High</option>
+          <option value="medium" selected>Medium</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+
+      <div id="annError" style="color:#ef4444;font-size:13px;display:none;padding:8px 12px;background:#fee2e2;border-radius:6px;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary btn-full" onclick="submitAnn()">Post Announcement</button>
+    </div>
+  </div>
+</div>
+
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function submitAnn() {
+  const course_id = document.getElementById('annCourse').value;
+  const title = document.getElementById('annTitle').value.trim();
+  const content = document.getElementById('annContent').value.trim();
+  const priority = document.getElementById('annPriority').value;
+  const errEl = document.getElementById('annError');
+
+  if (!course_id || !title || !content) {
+    errEl.textContent = 'Course, title and content are all required.';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+
+  const res = await apiPost("{% url 'create_announcement' %}", {
+    course_id, title, content, priority
+  });
+
+  if (res.success) {
+    location.reload();
+  } else {
+    errEl.textContent = res.error || 'Error posting announcement.';
+    errEl.style.display = 'block';
+  }
+}
+
+async function deleteAnn(id) {
+  if (!confirm('Delete this announcement?')) return;
+  const res = await apiPost(`/faculty/announcements/${id}/delete/`, {});
+  if (res.success) {
+    document.getElementById(`ann${id}`).remove();
+  }
+}
+</script>
+{% endblock %}
