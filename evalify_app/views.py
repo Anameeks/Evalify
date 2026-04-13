@@ -50,6 +50,7 @@ def sign_up_html(request):
         password = request.POST.get('password', '')
         role = request.POST.get('role', 'student')
 
+        # Basic validations
         if not full_name or not email or not password:
             return render(request, 'sign_up.html', {'error': 'All fields are required.'})
         if len(password) < 8:
@@ -57,7 +58,20 @@ def sign_up_html(request):
         if User.objects.filter(email=email).exists():
             return render(request, 'sign_up.html', {'error': 'Email already registered.'})
 
-        
+        # --- EMAIL DOMAIN VALIDATION BASED ON ROLE ---
+        import re
+        if role == 'student':
+            # Must be digits@uap-bd.edu
+            if not re.match(r'^\d+@uap-bd\.edu$', email):
+                return render(request, 'sign_up.html', {'error': 'Student email must be digits@uap-bd.edu (e.g., 20241001@uap-bd.edu).'})
+        elif role == 'faculty':
+            # Must be name (letters/dots/underscores)@uap-bd.edu
+            if not re.match(r'^[A-Za-z][A-Za-z0-9._]*@uap-bd\.edu$', email):
+                return render(request, 'sign_up.html', {'error': 'Faculty email must be name@uap-bd.edu (e.g., john.doe@uap-bd.edu).'})
+        else:
+            return render(request, 'sign_up.html', {'error': 'Invalid role selected.'})
+
+        # Generate unique username from email local part
         username = email.split('@')[0]
         base = username
         i = 1
@@ -65,6 +79,7 @@ def sign_up_html(request):
             username = f"{base}{i}"
             i += 1
 
+        # Create user (your custom User model has `role` and `full_name` fields)
         user = User.objects.create_user(
             username=username,
             email=email,
