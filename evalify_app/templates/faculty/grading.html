@@ -1,0 +1,426 @@
+{% extends 'faculty/base.html' %}
+{% block nav_grading %}active{% endblock %}
+
+{% block content %}
+<div class="page-title">Grading</div>
+<div class="page-sub">Review student submissions and award marks per question.</div>
+
+<!-- Stats -->
+<div class="g-stats" style="margin-bottom:24px;">
+  <div class="g-stat">
+    <div>
+      <div class="g-stat-label">Pending</div>
+      <div class="g-stat-val" style="color:var(--orange);">{{ pending }}</div>
+    </div>
+    <span style="font-size:26px;margin-left:10px;">⏳</span>
+  </div>
+  <div class="g-stat">
+    <div>
+      <div class="g-stat-label">Graded</div>
+      <div class="g-stat-val" style="color:var(--green);">{{ graded }}</div>
+    </div>
+    <span style="font-size:26px;margin-left:10px;">✅</span>
+  </div>
+  <div class="g-stat">
+    <div>
+      <div class="g-stat-label">Flagged</div>
+      <div class="g-stat-val" style="color:var(--red);">{{ flagged }}</div>
+    </div>
+    <span style="font-size:26px;margin-left:10px;">🚩</span>
+  </div>
+  <div class="g-stat">
+    <div>
+      <div class="g-stat-label">Total</div>
+      <div class="g-stat-val">{{ submissions|length }}</div>
+    </div>
+    <span style="font-size:26px;margin-left:10px;">📋</span>
+  </div>
+</div>
+
+<!-- Filter bar -->
+<div class="filter-bar">
+  <div class="tab-bar" style="margin-bottom:0;">
+    <button class="tab-btn active" onclick="filterTab('all',this)">All</button>
+    <button class="tab-btn" onclick="filterTab('submitted',this)">Pending</button>
+    <button class="tab-btn" onclick="filterTab('graded',this)">Graded</button>
+    <button class="tab-btn" onclick="filterTab('flagged',this)">Flagged</button>
+  </div>
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input class="form-control" id="searchInput" placeholder="Search by student name or assessment…"
+           oninput="applySearch()" style="padding-left:32px;">
+  </div>
+</div>
+
+<!-- Submission list -->
+<div id="subList">
+{% if submissions %}
+  {% for s in submissions %}
+  <div class="sub-card"
+       data-status="{{ s.status }}"
+       data-search="{{ s.student.full_name|lower }} {{ s.student.username|lower }} {{ s.assessment.title|lower }}">
+    <div class="list-item" style="margin-bottom:10px;cursor:default;">
+
+      <!-- Left avatar -->
+      <div class="sub-avatar {{ s.status }}" style="width:42px;height:42px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;">
+        {% if s.status == 'graded' %}✅
+        {% elif s.status == 'flagged' %}🚩
+        {% else %}📄{% endif %}
+      </div>
+
+      <!-- Info -->
+      <div class="list-body">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span class="list-title">{{ s.student.full_name|default:s.student.username }}</span>
+          <span class="tag tag-{{ s.status }}">{{ s.status|capfirst }}</span>
+          {% if s.plagiarism_score > 30 %}
+            <span class="tag tag-similar" style="font-size:10px;">⚠ Plagiarism {{ s.plagiarism_score|floatformat:0 }}%</span>
+          {% endif %}
+          {% if s.ai_content_score > 50 %}
+            <span class="tag" style="background:#fef3c7;color:#92400e;font-size:10px;">⚠ AI {{ s.ai_content_score|floatformat:0 }}%</span>
+          {% endif %}
+        </div>
+        <div class="list-meta" style="margin-top:3px;">
+          {{ s.assessment.title }}
+          &nbsp;·&nbsp; {{ s.assessment.get_assessment_type_display }}
+          &nbsp;·&nbsp; {{ s.assessment.course.code }}
+          &nbsp;·&nbsp; Submitted {{ s.submitted_at|date:"M d, Y H:i" }}
+          {% if s.status != 'submitted' %}
+            &nbsp;·&nbsp; Score: <strong>{{ s.total_score|floatformat:1 }} / {{ s.assessment.total_marks }}</strong>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Action -->
+      <button class="btn btn-primary btn-sm" onclick="openGrading({{ s.id }})">
+        {% if s.status == 'submitted' %}Grade{% else %}Re-grade{% endif %}
+      </button>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="empty">
+    <div class="empty-icon">📭</div>
+    <div class="empty-title">No submissions yet</div>
+    <div style="font-size:13px;">Students haven't submitted anything for your courses.</div>
+  </div>
+{% endif %}
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     GRADING MODAL
+═══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="gradingModal">
+  <div class="modal" style="max-width:820px;">
+
+    <!-- Header -->
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="gTitle">Grade Submission</div>
+        <div style="font-size:12px;color:var(--gray);margin-top:2px;" id="gMeta"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('gradingModal')">&times;</button>
+    </div>
+
+    <!-- Body -->
+    <div class="modal-body" id="gBody">
+      <div style="text-align:center;padding:40px;color:var(--light);">Loading…</div>
+    </div>
+
+    <!-- Footer -->
+    <div class="modal-foot" style="display:flex;align-items:center;gap:12px;padding:16px 24px;border-top:1px solid var(--border);">
+      <div style="flex:1;">
+        <span style="font-size:13px;color:var(--gray);">Total Score:</span>
+        <span id="gTotal" style="font-size:22px;font-weight:800;color:var(--teal);margin-left:8px;">0</span>
+        <span id="gMaxTotal" style="font-size:14px;color:var(--gray);"></span>
+      </div>
+      <button class="btn btn-outline" onclick="closeModal('gradingModal')">Cancel</button>
+      <button class="btn btn-primary" id="gSubmitBtn" onclick="submitGrade()">Save Grades</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<style>
+  .q-grade-card {
+    background:#f8fafc;
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:16px;
+    margin-bottom:12px;
+  }
+  .q-grade-card:last-child { margin-bottom:0; }
+  .q-grade-head {
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom:10px;
+    gap:12px;
+  }
+  .q-grade-text { font-size:14px; font-weight:600; flex:1; line-height:1.5; }
+  .marks-wrap {
+    display:flex;
+    align-items:center;
+    gap:6px;
+    flex-shrink:0;
+    background:#fff;
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:6px 12px;
+  }
+  .marks-wrap input {
+    width:62px;
+    border:none;
+    outline:none;
+    font-size:18px;
+    font-weight:800;
+    color:var(--teal);
+    text-align:center;
+    font-family:'Inter',sans-serif;
+    background:transparent;
+  }
+  .marks-wrap .sep { font-size:16px; color:var(--light); }
+  .marks-wrap .max-lbl { font-size:14px; font-weight:600; color:var(--gray); }
+  .marks-warn { font-size:11px; color:var(--red); display:none; margin-top:3px; }
+  .answer-box {
+    background:#fff;
+    border:1px solid #e5e7eb;
+    border-radius:8px;
+    padding:14px;
+    font-size:13px;
+    line-height:1.7;
+    color:#374151;
+    white-space:pre-wrap;
+    word-break:break-word;
+    max-height:220px;
+    overflow-y:auto;
+    margin-top:6px;
+  }
+  .integrity-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+  .score-bar { height:6px; background:#e5e7eb; border-radius:3px; margin-top:6px; overflow:hidden; }
+  .score-bar-fill { height:100%; border-radius:3px; transition:width .3s; }
+  .section-label {
+    font-size:11px;
+    font-weight:700;
+    color:var(--gray);
+    letter-spacing:.5px;
+    text-transform:uppercase;
+    margin-bottom:10px;
+  }
+  .clo-tag {
+    display:inline-block;
+    background:#e0f5f4;
+    color:#0f766e;
+    font-size:10px;
+    font-weight:700;
+    padding:2px 7px;
+    border-radius:4px;
+    margin:2px;
+  }
+  .plo-tag {
+    display:inline-block;
+    background:#ede9fe;
+    color:#6d28d9;
+    font-size:10px;
+    font-weight:700;
+    padding:2px 7px;
+    border-radius:4px;
+    margin:2px;
+  }
+</style>
+
+<script>
+let currentSubId = null;
+let currentQuestions = [];
+
+// ── Filter by status tab ───────────────────────────────────────
+function filterTab(status, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters(status);
+}
+
+function applySearch() {
+  const activeBtn = document.querySelector('.tab-btn.active');
+  const status = activeBtn ? activeBtn.getAttribute('onclick').match(/'(\w+)'/)?.[1] : 'all';
+  applyFilters(status || 'all');
+}
+
+function applyFilters(status) {
+  const q = document.getElementById('searchInput').value.toLowerCase().trim();
+  document.querySelectorAll('.sub-card').forEach(card => {
+    const matchStatus = (status === 'all') || (card.dataset.status === status);
+    const matchSearch = !q || card.dataset.search.includes(q);
+    card.style.display = (matchStatus && matchSearch) ? '' : 'none';
+  });
+}
+
+// ── Open grading modal ─────────────────────────────────────────
+async function openGrading(subId) {
+  currentSubId = subId;
+  currentQuestions = [];
+  document.getElementById('gBody').innerHTML = '<div style="text-align:center;padding:40px;color:var(--light);">Loading…</div>';
+  document.getElementById('gTotal').textContent = '0';
+  document.getElementById('gMaxTotal').textContent = '';
+  openModal('gradingModal');
+
+  const res = await fetch(`/faculty/grading/${subId}/`);
+  const d = await res.json();
+  currentQuestions = d.questions;
+
+  document.getElementById('gTitle').textContent = `Grading — ${d.student_name}`;
+  document.getElementById('gMeta').textContent =
+    `${d.assessment_title} · ${d.assessment_type.charAt(0).toUpperCase()+d.assessment_type.slice(1)} · Total ${d.total_marks} marks`;
+  document.getElementById('gMaxTotal').textContent = ` / ${d.total_marks}`;
+
+  // Build body HTML
+  let html = '';
+
+  // ── Integrity flags ──
+  const pFlag = d.plagiarism > 30;
+  const aFlag = d.ai_content > 50;
+  html += `<div class="integrity-grid">`;
+  html += `<div class="integrity-box ${pFlag?'warn':''}">
+    <div class="integrity-label">Plagiarism Score</div>
+    <div class="integrity-val ${pFlag?'warn':''}">${d.plagiarism.toFixed(1)}%</div>
+    <div class="score-bar"><div class="score-bar-fill" style="width:${d.plagiarism}%;background:${pFlag?'var(--red)':'var(--green)'};"></div></div>
+  </div>`;
+  html += `<div class="integrity-box ${aFlag?'warn':''}">
+    <div class="integrity-label">AI Content Score</div>
+    <div class="integrity-val ${aFlag?'warn':''}">${d.ai_content.toFixed(1)}%</div>
+    <div class="score-bar"><div class="score-bar-fill" style="width:${d.ai_content}%;background:${aFlag?'var(--red)':'var(--green)'};"></div></div>
+  </div>`;
+  html += `</div>`;
+
+  if (pFlag || aFlag) {
+    html += `<div class="flag-warn" style="margin-bottom:16px;">
+      ⚠ This submission will be marked as <strong>Flagged</strong> due to integrity concerns.
+    </div>`;
+  }
+
+  // ── Student answer ──
+  if (d.content || d.file_url) {
+    html += `<div class="section-label">Student's Answer</div>`;
+    if (d.content) {
+      html += `<div class="answer-box">${escapeHtml(d.content)}</div>`;
+    }
+    if (d.file_url) {
+      html += `<div style="margin-top:8px;">
+        <a href="${d.file_url}" target="_blank" class="btn btn-outline btn-sm">
+          📎 Download: ${escapeHtml(d.file_name || 'Attachment')}
+        </a>
+      </div>`;
+    }
+    html += `<div style="margin-bottom:18px;"></div>`;
+  }
+
+  // ── Questions ──
+  html += `<div class="section-label">Questions &amp; Marks</div>`;
+  if (d.questions.length === 0) {
+    html += `<div style="color:var(--gray);font-size:13px;padding:10px 0;">No questions defined for this assessment.</div>`;
+  } else {
+    d.questions.forEach((q, idx) => {
+      const cloTags = q.clos.map(c => `<span class="clo-tag">${c.code}</span>`).join('');
+      const ploTags = q.plos.map(p => `<span class="plo-tag">${p.code}</span>`).join('');
+      html += `
+      <div class="q-grade-card">
+        <div class="q-grade-head">
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--teal);margin-bottom:4px;">Q${q.order}</div>
+            <div class="q-grade-text">${escapeHtml(q.text)}</div>
+            ${(cloTags || ploTags) ? `<div style="margin-top:6px;">${cloTags}${ploTags}</div>` : ''}
+          </div>
+          <div>
+            <div class="marks-wrap">
+              <input type="number"
+                     id="marks-${q.id}"
+                     value="${q.obtained}"
+                     min="0"
+                     max="${q.max_marks}"
+                     step="0.5"
+                     oninput="validateMark(this,${q.max_marks});recalcTotal();"
+                     style="width:62px;">
+              <span class="sep">/</span>
+              <span class="max-lbl">${q.max_marks}</span>
+            </div>
+            <div class="marks-warn" id="warn-${q.id}">Max: ${q.max_marks}</div>
+          </div>
+        </div>
+      </div>`;
+    });
+  }
+
+  // ── Feedback ──
+  html += `
+  <div style="margin-top:16px;">
+    <div class="section-label">Feedback to Student</div>
+    <textarea class="form-control" id="gFeedback" rows="3"
+              placeholder="Optional feedback visible to the student after grading…">${escapeHtml(d.feedback||'')}</textarea>
+  </div>`;
+
+  document.getElementById('gBody').innerHTML = html;
+  recalcTotal();
+}
+
+// ── Validate individual mark input ────────────────────────────
+function validateMark(input, maxMark) {
+  const v = parseFloat(input.value);
+  const warnEl = document.getElementById(`warn-${input.id.split('-')[1]}`);
+  if (isNaN(v) || v < 0) {
+    input.value = 0;
+  } else if (v > maxMark) {
+    input.value = maxMark;
+    if (warnEl) { warnEl.style.display='block'; setTimeout(()=>{ warnEl.style.display='none'; }, 2000); }
+  }
+}
+
+// ── Live total recalculation ──────────────────────────────────
+function recalcTotal() {
+  let sum = 0;
+  currentQuestions.forEach(q => {
+    const el = document.getElementById(`marks-${q.id}`);
+    if (el) sum += parseFloat(el.value) || 0;
+  });
+  document.getElementById('gTotal').textContent = sum.toFixed(sum % 1 === 0 ? 0 : 1);
+}
+
+// ── Submit grades ─────────────────────────────────────────────
+async function submitGrade() {
+  if (!currentSubId) return;
+  const btn = document.getElementById('gSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  const question_grades = currentQuestions.map(q => ({
+    question_id: q.id,
+    marks: parseFloat(document.getElementById(`marks-${q.id}`)?.value) || 0
+  }));
+
+  const feedback = document.getElementById('gFeedback')?.value || '';
+
+  try {
+    const data = await apiPost(`/faculty/grading/${currentSubId}/grade/`, { question_grades, feedback });
+    if (data.success) {
+      closeModal('gradingModal');
+      location.reload();
+    } else {
+      alert(data.error || 'Failed to save grades.');
+    }
+  } catch(e) {
+    alert('Network error. Please try again.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Grades';
+  }
+}
+
+// ── Utility ───────────────────────────────────────────────────
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+{% endblock %}

@@ -33,6 +33,10 @@ urlpatterns = [
     path('faculty/assignments/<int:assignment_id>/delete/', views.delete_assignment, name='delete_assignment'),
     path('faculty/assignments/<int:assignment_id>/publish/', views.publish_assessment, name='publish_assessment'),
 
+    #Marks Sheet
+    path('faculty/marks-sheet/', views.faculty_marks_sheet, name='faculty_marks_sheet'),
+    path('faculty/grades/update/', views.update_question_grade, name='update_question_grade'),
+
     #Study Materials
     path('faculty/materials/', views.faculty_materials, name='faculty_materials'),
     path('faculty/materials/upload/', views.upload_material, name='upload_material'),

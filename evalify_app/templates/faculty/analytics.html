@@ -1,0 +1,134 @@
+{% extends 'faculty/base.html' %}
+{% block nav_analytics %}active{% endblock %}
+
+{% block content %}
+<div class="page-title">Analytics</div>
+<div class="page-sub">Grade distribution, CLO attainment, and academic integrity overview.</div>
+
+<!-- Course selector -->
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+  <span style="font-size:13px;font-weight:600;color:var(--gray);">Course:</span>
+  <form method="get" style="display:flex;gap:8px;align-items:center;">
+    <select name="course" class="form-control" style="width:260px;" onchange="this.form.submit()">
+      {% for c in courses %}
+      <option value="{{ c.id }}" {% if selected_course and selected_course.id == c.id %}selected{% endif %}>
+        {{ c.code }}: {{ c.name }}
+      </option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+{% if selected_course %}
+
+<!-- Grade distribution -->
+<div class="two-col" style="margin-bottom:20px;">
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">📊 Grade Distribution</div>
+    </div>
+    <canvas id="gradeChart" height="200"></canvas>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">🛡 Academic Integrity</div>
+    </div>
+    <canvas id="integrityChart" height="200"></canvas>
+  </div>
+</div>
+
+<!-- CLO Attainment -->
+<div class="panel" style="margin-bottom:20px;">
+  <div class="panel-head">
+    <div class="panel-title">🎯 CLO Attainment</div>
+    <span style="font-size:12px;color:var(--gray);">Based on all graded submissions</span>
+  </div>
+  {% if clo_attainment_list %}
+    {% for item in clo_attainment_list %}
+    <div class="clo-row">
+      <div class="clo-row-head">
+        <span style="font-size:13px;font-weight:600;">{{ item.code }}</span>
+        <span class="clo-pct {% if item.attainment >= 60 %}ok{% else %}bad{% endif %}">
+          {{ item.attainment }}%
+        </span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill {% if item.attainment < 60 %}red{% elif item.attainment < 80 %}orange{% endif %}"
+             style="width:{{ item.attainment }}%;"></div>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty" style="padding:24px;">
+      <div class="empty-icon" style="font-size:28px;">📉</div>
+      <div class="empty-title">No graded submissions yet</div>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Weak students -->
+{% if weak_students %}
+<div class="panel" style="margin-bottom:20px;">
+  <div class="panel-head">
+    <div class="panel-title">⚠ Students Below 70%</div>
+  </div>
+  {% for s in weak_students %}
+  <div class="weakness-row">
+    <div>
+      <div style="font-size:13px;font-weight:600;">{{ s.name }}</div>
+      <div style="font-size:12px;color:var(--gray);">Score: {{ s.score }}</div>
+    </div>
+    <div class="weakness-score">{{ s.pct }}%</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty">
+  <div class="empty-icon">📊</div>
+  <div class="empty-title">No courses found</div>
+  <div style="font-size:13px;">Create a course first from Courses &amp; CLOs.</div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const GRADE_DIST     = {{ grade_dist|safe }};
+const CLO_ATT        = {{ clo_attainment|safe }};
+const INTEGRITY_DATA = {{ integrity_data|safe }};
+
+if (document.getElementById('gradeChart')) {
+  new Chart(document.getElementById('gradeChart'), {
+    type: 'bar',
+    data: {
+      labels: GRADE_DIST.map(g => g.label),
+      datasets: [{
+        label: 'Students',
+        data: GRADE_DIST.map(g => g.count),
+        backgroundColor: ['#10b981','#3b82f6','#f59e0b','#f97316','#ef4444'],
+        borderRadius: 6,
+      }]
+    },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+  });
+}
+
+if (document.getElementById('integrityChart')) {
+  new Chart(document.getElementById('integrityChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Clean', 'AI Flagged', 'Plagiarism'],
+      datasets: [{
+        data: [INTEGRITY_DATA.clean, INTEGRITY_DATA.ai_flag, INTEGRITY_DATA.plagiarism],
+        backgroundColor: ['#10b981','#f59e0b','#ef4444'],
+      }]
+    },
+    options: { plugins: { legend: { position: 'bottom' } }, cutout: '60%' }
+  });
+}
+</script>
+{% endblock %}

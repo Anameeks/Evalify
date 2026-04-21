@@ -1,0 +1,390 @@
+{% extends 'faculty/base.html' %}
+{% block nav_marks_sheet %}active{% endblock %}
+
+{% block content %}
+<style>
+.ms-th {
+  background: var(--sidebar);
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+  padding: 7px 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  white-space: nowrap;
+}
+.ms-td {
+  border: 1px solid #e5e7eb;
+  padding: 4px 6px;
+  text-align: center;
+  white-space: nowrap;
+}
+.ms-td-name {
+  border: 1px solid #e5e7eb;
+  padding: 4px 8px;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.hd-group { background:#ffc000; color:#000; font-weight:700; text-align:center; padding:6px 4px; border:1px solid #e0a800; }
+.hd-q     { background:#ffd966; color:#7f6000; font-weight:700; text-align:center; padding:5px 6px; border:1px solid #e5e7eb; min-width:54px; }
+.hd-clo   { background:#fff2cc; color:#7f6000; text-align:center; padding:4px; border:1px solid #e5e7eb; font-size:11px; }
+.hd-max   { background:#f3f4f6; font-weight:700; text-align:center; padding:5px; border:1px solid #e5e7eb; color:var(--teal); }
+.hd-att   { background:#70ad47; color:#fff; font-weight:700; text-align:center; padding:6px; border:1px solid #5a9132; }
+.hd-att-sub { background:#a9d18e; color:#375623; font-weight:700; text-align:center; padding:5px 6px; border:1px solid #e5e7eb; min-width:52px; }
+.mark-input {
+  width: 52px; border: 1px solid #e5e7eb; border-radius: 4px;
+  text-align: center; padding: 3px 2px; font-size: 12px;
+  font-family: 'Inter', sans-serif; outline: none; background: transparent;
+  transition: border-color .15s;
+}
+.mark-input:focus { border-color: var(--teal); background: #fff; }
+.att-yes { color: #166534; font-weight: 700; }
+.att-no  { color: #991b1b; font-weight: 700; }
+.even-row { background: #fafafa; }
+.odd-row  { background: #fff; }
+</style>
+
+<div class="page-title">Marks Sheet</div>
+<div class="page-sub">Table 1: click any mark cell to edit — auto-saves. Table 2: updates live from Table 1.</div>
+
+<!-- Course selector -->
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+  <span style="font-size:13px;font-weight:600;color:var(--gray);">Course:</span>
+  <form method="get">
+    <select name="course" class="form-control" style="width:280px;" onchange="this.form.submit()">
+      {% for c in courses %}
+      <option value="{{ c.id }}"{% if selected_course and selected_course.id == c.id %} selected{% endif %}>
+        {{ c.code }}: {{ c.name }}
+      </option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+{% if not selected_course %}
+<div class="empty"><div class="empty-icon">📊</div><div class="empty-title">No courses found</div></div>
+
+{% elif not assessment_groups %}
+<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">No published assessments with questions</div>
+  <div style="font-size:13px;">Publish assessments and add questions first.</div></div>
+
+{% else %}
+
+<!-- ══════════════════════════════════════════════════════
+     TABLE 1 — MARKS MATRIX
+══════════════════════════════════════════════════════ -->
+<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px 18px;margin-bottom:28px;">
+  <div style="overflow-x:auto;">
+  <table style="border-collapse:collapse;font-size:12px;white-space:nowrap;">
+    <thead>
+    <!-- Title -->
+    <tr>
+      <td colspan="99"
+          style="text-align:center;font-size:14px;font-weight:700;background:#fef9c3;
+                 padding:8px 12px;border:1px solid #e5e7eb;">
+        Marks &mdash; {{ selected_course.code }}: {{ selected_course.name }}
+      </td>
+    </tr>
+    <!-- Assessment groups -->
+    <tr>
+      <th class="ms-th" rowspan="4" style="min-width:34px;">SL</th>
+      <th class="ms-th" rowspan="4" style="min-width:100px;">ID</th>
+      <th class="ms-th" rowspan="4" style="min-width:130px;text-align:left;padding-left:10px;">Name</th>
+      {% for g in assessment_groups %}
+      <th class="hd-group" colspan="{{ g.col_count }}">
+        {{ g.assessment.title }} ({{ g.assessment.total_marks }})
+      </th>
+      {% endfor %}
+      <th class="ms-th" rowspan="4" style="min-width:54px;">Total</th>
+    </tr>
+    <!-- Question labels -->
+    <tr>
+      {% for col in all_columns %}
+      <th class="hd-q">Q{{ col.question.order }}</th>
+      {% endfor %}
+    </tr>
+    <!-- CLO row -->
+    <tr>
+      {% for col in all_columns %}
+      <td class="hd-clo">{% if col.clo_codes %}{{ col.clo_codes|join:", " }}{% else %}&mdash;{% endif %}</td>
+      {% endfor %}
+    </tr>
+    <!-- PLO row -->
+    <tr>
+      {% for col in all_columns %}
+      <td class="hd-clo">{% if col.plo_codes %}{{ col.plo_codes|join:", " }}{% else %}&mdash;{% endif %}</td>
+      {% endfor %}
+    </tr>
+    <!-- Max marks -->
+    <tr>
+      <td class="hd-max" colspan="3" style="text-align:center;font-size:11px;letter-spacing:.3px;text-transform:uppercase;">
+        Distribution of Marks
+      </td>
+      {% for col in all_columns %}
+      <td class="hd-max">{{ col.question.max_marks }}</td>
+      {% endfor %}
+      <td class="hd-max" style="color:var(--teal);">{{ total_max }}</td>
+    </tr>
+    </thead>
+
+    <tbody>
+    {% if rows %}
+      {% for row in rows %}
+      <tr class="{% cycle 'odd-row' 'even-row' %}" data-student="{{ row.student.id }}">
+        <td class="ms-td" style="color:var(--gray);">{{ row.sl }}</td>
+        <td class="ms-td" style="font-size:11px;">{{ row.student.username }}</td>
+        <td class="ms-td-name">{{ row.student.full_name|default:row.student.username }}</td>
+
+        {% for cell in row.cells %}
+        <td class="ms-td" style="padding:2px 3px;">
+          <input class="mark-input"
+                 id="mk-{{ row.student.id }}-{{ cell.question_id }}"
+                 data-student="{{ row.student.id }}"
+                 data-qid="{{ cell.question_id }}"
+                 data-max="{{ cell.max_marks }}"
+                 type="number" min="0" max="{{ cell.max_marks }}" step="0.5"
+                 value="{% if cell.value is not None %}{{ cell.value|floatformat:2 }}{% endif %}"
+                 placeholder="—">
+        </td>
+        {% endfor %}
+
+        <td id="total-{{ row.student.id }}"
+            class="ms-td" style="font-weight:700;color:var(--teal);">
+          {{ row.total|floatformat:2 }}
+        </td>
+      </tr>
+      {% endfor %}
+    {% else %}
+      <tr><td colspan="99" class="ms-td" style="padding:32px;color:var(--light);">No students enrolled.</td></tr>
+    {% endif %}
+    </tbody>
+  </table>
+  </div>
+  <div style="margin-top:10px;font-size:12px;color:var(--gray);">
+    ✏️ Edit any mark cell — changes save automatically (orange = saving, green = saved).
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════
+     TABLE 2 — CLO / PLO ATTAINMENT
+══════════════════════════════════════════════════════ -->
+<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px 18px;">
+
+{% if not clos and not plos %}
+<div class="empty" style="padding:20px;">
+  <div class="empty-icon" style="font-size:28px;">🎯</div>
+  <div class="empty-title">No CLOs or PLOs mapped to questions</div>
+  <div style="font-size:13px;">Tag questions with CLOs/PLOs when creating assessments.</div>
+</div>
+{% else %}
+
+  <div style="overflow-x:auto;">
+  <table style="border-collapse:collapse;font-size:12px;white-space:nowrap;">
+    <thead>
+    <!-- Title -->
+    <tr>
+      <td colspan="{{ t2_colspan }}"
+          style="text-align:center;font-size:14px;font-weight:700;background:#fef9c3;
+                 padding:8px 12px;border:1px solid #e5e7eb;">
+        Individual Student CLO-PLO Attainment &mdash; {{ selected_course.code }}: {{ selected_course.name }}
+      </td>
+    </tr>
+    <!-- Section headers -->
+    <tr>
+      <th class="ms-th" rowspan="3" style="min-width:100px;">ID</th>
+      <th class="ms-th" rowspan="3" style="min-width:130px;text-align:left;padding-left:10px;">Name</th>
+      {% if clos %}<th class="hd-group" colspan="{{ clos|length }}">Raw Marks of CLOs</th>{% endif %}
+      {% if plos %}<th class="hd-group" colspan="{{ plos|length }}">Raw Marks of PLOs</th>{% endif %}
+      {% if clos %}<th class="hd-group" colspan="{{ clos|length }}">% Marks of CLOs</th>{% endif %}
+      {% if plos %}<th class="hd-group" colspan="{{ plos|length }}">% Marks of PLOs</th>{% endif %}
+      {% if clos %}<th class="hd-att"   colspan="{{ clos|length }}">Attainment of CLOs</th>{% endif %}
+      {% if plos %}<th class="hd-att"   colspan="{{ plos|length }}">Attainment of PLOs</th>{% endif %}
+    </tr>
+    <!-- Code labels -->
+    <tr>
+      {% for item in clo_max_list %}<th class="hd-q">{{ item.clo.code }}</th>{% endfor %}
+      {% for item in plo_max_list %}<th class="hd-q">{{ item.plo.code }}</th>{% endfor %}
+      {% for item in clo_max_list %}<th class="hd-q">{{ item.clo.code }}</th>{% endfor %}
+      {% for item in plo_max_list %}<th class="hd-q">{{ item.plo.code }}</th>{% endfor %}
+      {% for item in clo_max_list %}<th class="hd-att-sub">{{ item.clo.code }}</th>{% endfor %}
+      {% for item in plo_max_list %}<th class="hd-att-sub">{{ item.plo.code }}</th>{% endfor %}
+    </tr>
+    <!-- Max marks header -->
+    <tr>
+      {% for item in clo_max_list %}
+      <td class="hd-clo" style="font-weight:700;color:var(--teal);">{{ item.max }}</td>
+      {% endfor %}
+      {% for item in plo_max_list %}
+      <td class="hd-clo" style="font-weight:700;color:var(--teal);">{{ item.max }}</td>
+      {% endfor %}
+      {% for item in clo_max_list %}
+      <td class="hd-clo" style="font-weight:600;color:var(--gray);">100.00</td>
+      {% endfor %}
+      {% for item in plo_max_list %}
+      <td class="hd-clo" style="font-weight:600;color:var(--gray);">100.00</td>
+      {% endfor %}
+      {% for item in clo_max_list %}
+      <td style="background:#e2efda;text-align:center;font-size:10px;padding:5px;border:1px solid #e5e7eb;color:var(--gray);">≥40%=Yes</td>
+      {% endfor %}
+      {% for item in plo_max_list %}
+      <td style="background:#e2efda;text-align:center;font-size:10px;padding:5px;border:1px solid #e5e7eb;color:var(--gray);">≥40%=Yes</td>
+      {% endfor %}
+    </tr>
+    </thead>
+
+    <tbody>
+    {% if rows %}
+      {% for row in rows %}
+      <tr class="{% cycle 'odd-row' 'even-row' %}">
+        <td class="ms-td" style="font-size:11px;">{{ row.student.username }}</td>
+        <td class="ms-td-name">{{ row.student.full_name|default:row.student.username }}</td>
+
+        <!-- CLO raw -->
+        {% for cc in row.clo_cells %}
+        <td id="clo-raw-{{ row.student.id }}-{{ cc.clo_id }}" class="ms-td">{{ cc.raw|floatformat:2 }}</td>
+        {% endfor %}
+        <!-- PLO raw -->
+        {% for pc in row.plo_cells %}
+        <td id="plo-raw-{{ row.student.id }}-{{ pc.plo_id }}" class="ms-td">{{ pc.raw|floatformat:2 }}</td>
+        {% endfor %}
+        <!-- CLO % -->
+        {% for cc in row.clo_cells %}
+        <td id="clo-pct-{{ row.student.id }}-{{ cc.clo_id }}" class="ms-td">—</td>
+        {% endfor %}
+        <!-- PLO % -->
+        {% for pc in row.plo_cells %}
+        <td id="plo-pct-{{ row.student.id }}-{{ pc.plo_id }}" class="ms-td">—</td>
+        {% endfor %}
+        <!-- CLO attainment -->
+        {% for cc in row.clo_cells %}
+        <td id="clo-att-{{ row.student.id }}-{{ cc.clo_id }}" class="ms-td">—</td>
+        {% endfor %}
+        <!-- PLO attainment -->
+        {% for pc in row.plo_cells %}
+        <td id="plo-att-{{ row.student.id }}-{{ pc.plo_id }}" class="ms-td">—</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    {% else %}
+      <tr><td colspan="{{ t2_colspan }}" class="ms-td" style="padding:32px;color:var(--light);">No students enrolled.</td></tr>
+    {% endif %}
+    </tbody>
+  </table>
+  </div>
+
+  <div style="margin-top:10px;font-size:12px;color:var(--gray);">
+    🎯 Attainment threshold: <strong>40%</strong> &nbsp;·&nbsp;
+    <strong class="att-yes">Yes</strong> = at or above &nbsp;·&nbsp;
+    <strong class="att-no">No</strong> = below. Updates instantly when you edit Table 1.
+  </div>
+{% endif %}
+</div>
+
+{% endif %}{# end selected_course / assessment_groups #}
+{% endblock %}
+
+
+{% block scripts %}
+{% if selected_course and assessment_groups %}
+<script>
+const COLUMNS = {{ js_columns|safe }};
+const CLOS    = {{ js_clos|safe }};
+const PLOS    = {{ js_plos|safe }};
+
+// Bootstrap: calculate all attainment cells on first load
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('tr[data-student]').forEach(tr => {
+    recalcRow(parseInt(tr.dataset.student));
+  });
+
+  // Wire inputs
+  document.querySelectorAll('.mark-input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      clamp(inp);
+      recalcRow(parseInt(inp.dataset.student));
+    });
+    inp.addEventListener('change', () => {
+      clamp(inp);
+      debounceSave(inp);
+    });
+    inp.addEventListener('blur', () => debounceSave(inp));
+  });
+});
+
+function clamp(inp) {
+  let v = parseFloat(inp.value);
+  const max = parseFloat(inp.dataset.max);
+  if (isNaN(v) || v < 0) { inp.value = ''; return; }
+  if (v > max) inp.value = max;
+}
+
+// ── Recalculate a student row ───────────────────────────────
+function recalcRow(studentId) {
+  const markMap = {};
+  COLUMNS.forEach(col => {
+    const el = document.getElementById(`mk-${studentId}-${col.qid}`);
+    markMap[col.qid] = el ? (parseFloat(el.value) || 0) : 0;
+  });
+
+  // Total marks (table 1)
+  const total = Object.values(markMap).reduce((a, b) => a + b, 0);
+  const totalEl = document.getElementById(`total-${studentId}`);
+  if (totalEl) totalEl.textContent = fmt(total);
+
+  // CLOs
+  CLOS.forEach(clo => {
+    let raw = 0;
+    COLUMNS.forEach(col => { if (col.clo_ids.includes(clo.id)) raw += markMap[col.qid] || 0; });
+    const pct = clo.max > 0 ? raw / clo.max * 100 : null;
+    const att = pct !== null ? (pct >= 40 ? 'Yes' : 'No') : '—';
+
+    set(`clo-raw-${studentId}-${clo.id}`, fmt(raw));
+    set(`clo-pct-${studentId}-${clo.id}`, pct !== null ? pct.toFixed(2) : '—');
+    att2(`clo-att-${studentId}-${clo.id}`, att);
+  });
+
+  // PLOs
+  PLOS.forEach(plo => {
+    let raw = 0;
+    COLUMNS.forEach(col => { if (col.plo_ids.includes(plo.id)) raw += markMap[col.qid] || 0; });
+    const pct = plo.max > 0 ? raw / plo.max * 100 : null;
+    const att = pct !== null ? (pct >= 40 ? 'Yes' : 'No') : '—';
+
+    set(`plo-raw-${studentId}-${plo.id}`, fmt(raw));
+    set(`plo-pct-${studentId}-${plo.id}`, pct !== null ? pct.toFixed(2) : '—');
+    att2(`plo-att-${studentId}-${plo.id}`, att);
+  });
+}
+
+function fmt(v) { return (v % 1 === 0) ? v.toString() : v.toFixed(2); }
+function set(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+function att2(id, val) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = val;
+  el.className = 'ms-td ' + (val === 'Yes' ? 'att-yes' : val === 'No' ? 'att-no' : '');
+}
+
+// ── Debounced AJAX save ─────────────────────────────────────
+function debounceSave(inp) {
+  clearTimeout(inp._t);
+  inp._t = setTimeout(() => saveGrade(inp), 700);
+}
+
+async function saveGrade(inp) {
+  const marks = parseFloat(inp.value);
+  if (isNaN(marks)) return;
+  inp.style.borderColor = '#f59e0b';
+  try {
+    const r = await apiPost('{% url "update_question_grade" %}', {
+      student_id:  parseInt(inp.dataset.student),
+      question_id: parseInt(inp.dataset.qid),
+      marks:       marks,
+    });
+    inp.style.borderColor = r.success ? '#10b981' : '#ef4444';
+    if (r.success) setTimeout(() => { inp.style.borderColor = ''; }, 1800);
+  } catch { inp.style.borderColor = '#ef4444'; }
+}
+</script>
+{% endif %}
+{% endblock %}
