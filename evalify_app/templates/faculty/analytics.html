@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="page-title">Analytics</div>
-<div class="page-sub">Grade distribution, CLO attainment, and academic integrity overview.</div>
+<div class="page-sub">Grade distribution, CLO attainment per student, PLO attainment, and academic integrity overview.</div>
 
 <!-- Course selector -->
 <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
@@ -21,7 +21,7 @@
 
 {% if selected_course %}
 
-<!-- Grade distribution -->
+<!-- Grade distribution + Academic Integrity -->
 <div class="two-col" style="margin-bottom:20px;">
   <div class="panel">
     <div class="panel-head">
@@ -38,32 +38,39 @@
   </div>
 </div>
 
-<!-- CLO Attainment -->
+<!-- CLO Attainment Per Student (Line Chart) -->
 <div class="panel" style="margin-bottom:20px;">
   <div class="panel-head">
-    <div class="panel-title">🎯 CLO Attainment</div>
-    <span style="font-size:12px;color:var(--gray);">Based on all graded submissions</span>
+    <div class="panel-title">📈 CLO Attainment Per Student</div>
+    <span style="font-size:12px;color:var(--gray);">Average CLO attainment across all graded submissions</span>
   </div>
-  {% if clo_attainment_list %}
-    {% for item in clo_attainment_list %}
-    <div class="clo-row">
-      <div class="clo-row-head">
-        <span style="font-size:13px;font-weight:600;">{{ item.code }}</span>
-        <span class="clo-pct {% if item.attainment >= 60 %}ok{% else %}bad{% endif %}">
-          {{ item.attainment }}%
-        </span>
-      </div>
-      <div class="progress-bar">
-        <div class="progress-fill {% if item.attainment < 60 %}red{% elif item.attainment < 80 %}orange{% endif %}"
-             style="width:{{ item.attainment }}%;"></div>
-      </div>
-    </div>
-    {% endfor %}
+  {% if student_clo_list %}
+  <div style="position:relative;height:300px;padding-top:8px;">
+    <canvas id="studentCloChart"></canvas>
+  </div>
   {% else %}
-    <div class="empty" style="padding:24px;">
-      <div class="empty-icon" style="font-size:28px;">📉</div>
-      <div class="empty-title">No graded submissions yet</div>
-    </div>
+  <div class="empty" style="padding:32px;">
+    <div class="empty-icon" style="font-size:28px;">📉</div>
+    <div class="empty-title">No graded submissions yet</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- PLO Attainment (Vertical Bar Chart with Gradient) -->
+<div class="panel" style="margin-bottom:20px;">
+  <div class="panel-head">
+    <div class="panel-title">🎯 PLO Attainment</div>
+    <span style="font-size:12px;color:var(--gray);">Aggregated across all graded submissions</span>
+  </div>
+  {% if plo_attainment_list %}
+  <div style="position:relative;height:300px;padding-top:8px;">
+    <canvas id="ploBarChart"></canvas>
+  </div>
+  {% else %}
+  <div class="empty" style="padding:32px;">
+    <div class="empty-icon" style="font-size:28px;">📉</div>
+    <div class="empty-title">No PLOs mapped yet</div>
+  </div>
   {% endif %}
 </div>
 
@@ -96,11 +103,14 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script>
-const GRADE_DIST     = {{ grade_dist|safe }};
-const CLO_ATT        = {{ clo_attainment|safe }};
-const INTEGRITY_DATA = {{ integrity_data|safe }};
+const GRADE_DIST       = {{ grade_dist|safe }};
+const INTEGRITY_DATA   = {{ integrity_data|safe }};
+const STUDENT_CLO_DATA = {{ student_clo_data|safe }};
+const PLO_ATTAINMENT   = {{ plo_attainment|safe }};
 
+/* ── Grade Distribution ── */
 if (document.getElementById('gradeChart')) {
   new Chart(document.getElementById('gradeChart'), {
     type: 'bar',
@@ -117,6 +127,7 @@ if (document.getElementById('gradeChart')) {
   });
 }
 
+/* ── Academic Integrity ── */
 if (document.getElementById('integrityChart')) {
   new Chart(document.getElementById('integrityChart'), {
     type: 'doughnut',
@@ -128,6 +139,134 @@ if (document.getElementById('integrityChart')) {
       }]
     },
     options: { plugins: { legend: { position: 'bottom' } }, cutout: '60%' }
+  });
+}
+
+/* ── CLO Attainment Per Student (Line Chart, demo-1 style) ── */
+if (document.getElementById('studentCloChart') && STUDENT_CLO_DATA.length) {
+  new Chart(document.getElementById('studentCloChart'), {
+    type: 'line',
+    data: {
+      labels: STUDENT_CLO_DATA.map(s => s.name),
+      datasets: [{
+        label: 'CLO Attainment',
+        data: STUDENT_CLO_DATA.map(s => s.attainment),
+        borderColor: '#20b2aa',
+        backgroundColor: 'rgba(32,178,170,0.08)',
+        borderWidth: 2.5,
+        pointBackgroundColor: '#20b2aa',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2.5,
+        pointRadius: 6,
+        pointHoverRadius: 9,
+        tension: 0.35,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { top: 28, right: 16 } },
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          anchor: 'top',
+          align: 'top',
+          offset: 6,
+          formatter: v => v + '%',
+          font: { size: 11, weight: '700' },
+          color: '#374151',
+        }
+      },
+      scales: {
+        y: {
+          min: 0,
+          max: 110,
+          ticks: {
+            callback: v => v > 100 ? '' : v + '%',
+            font: { size: 11 },
+            color: '#6b7280',
+            stepSize: 20,
+          },
+          grid: { color: '#f3f4f6' },
+          border: { display: false },
+        },
+        x: {
+          ticks: { font: { size: 11 }, maxRotation: 30, color: '#6b7280' },
+          grid: { display: false },
+          border: { display: false },
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+}
+
+/* ── PLO Attainment (Vertical Bar with gradient, demo-2 style) ── */
+if (document.getElementById('ploBarChart') && PLO_ATTAINMENT.length) {
+  const ctx = document.getElementById('ploBarChart').getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 270);
+  grad.addColorStop(0, 'rgba(16,185,129,0.92)');
+  grad.addColorStop(1, 'rgba(16,185,129,0.18)');
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: PLO_ATTAINMENT.map(p => p.code),
+      datasets: [{
+        label: 'PLO Attainment',
+        data: PLO_ATTAINMENT.map(p => p.attainment),
+        backgroundColor: grad,
+        borderRadius: { topLeft: 7, topRight: 7 },
+        borderSkipped: 'bottom',
+        barPercentage: 0.55,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { top: 32, right: 16 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => {
+              const idx = items[0].dataIndex;
+              return PLO_ATTAINMENT[idx].code + ': ' + PLO_ATTAINMENT[idx].description;
+            },
+            label: ctx => ' ' + ctx.raw + '%'
+          }
+        },
+        datalabels: {
+          anchor: 'end',
+          align: 'end',
+          offset: 4,
+          formatter: v => v + '%',
+          font: { size: 12, weight: '700' },
+          color: '#065f46',
+        }
+      },
+      scales: {
+        y: {
+          min: 0,
+          max: 115,
+          ticks: {
+            callback: v => v > 100 ? '' : v + '%',
+            font: { size: 11 },
+            color: '#6b7280',
+            stepSize: 20,
+          },
+          grid: { color: '#f3f4f6' },
+          border: { display: false },
+        },
+        x: {
+          ticks: { font: { size: 12, weight: '600' }, color: '#374151' },
+          grid: { display: false },
+          border: { display: false },
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
   });
 }
 </script>
