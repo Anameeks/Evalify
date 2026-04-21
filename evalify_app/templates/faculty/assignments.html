@@ -317,6 +317,50 @@
         </div>
       </div>
 
+      <!-- ── Grace Period / Late Submission Policy ── -->
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;
+                  padding:16px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <span style="font-size:15px;">⏰</span>
+          <div style="font-size:13px;font-weight:700;color:#166534;">Late Submission Policy</div>
+          <span style="font-size:11px;color:var(--gray);font-weight:400;">(optional)</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label">Grace Period (hours after due date)</label>
+            <input class="form-control" id="aGraceHours" type="number" min="0" value="0"
+                   placeholder="0 = no grace period" oninput="updateGracePreview()">
+            <div style="font-size:11px;color:var(--gray);margin-top:3px;">
+              Students can still submit within this window
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label">Max Late Days Allowed</label>
+            <input class="form-control" id="aMaxLateDays" type="number" min="0" value="0"
+                   placeholder="0 = only grace period" oninput="updateGracePreview()">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label">Deduction Type</label>
+            <select class="form-control" id="aDeductType"
+                    onchange="updateDeductLabel();updateGracePreview();">
+              <option value="percent">Percentage per day (%)</option>
+              <option value="flat">Flat marks per day</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" id="deductValueLabel">Deduction per day (%)</label>
+            <input class="form-control" id="aDeductValue" type="number" min="0"
+                   step="0.5" value="0" placeholder="0 = no deduction"
+                   oninput="updateGracePreview()">
+          </div>
+        </div>
+        <div id="gracePolicyPreview"
+             style="margin-top:10px;font-size:12px;color:#166534;background:#dcfce7;
+                    border-radius:6px;padding:8px 12px;display:none;"></div>
+      </div>
+
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
         <div style="font-size:13px;font-weight:700;color:var(--teal);">Questions &amp; CLO/PLO Mapping</div>
         <button class="btn btn-outline btn-sm" type="button" onclick="addQuestion()">+ Add Question</button>
@@ -475,7 +519,12 @@ async function submitCreate() {
   const data = await apiPost("{% url 'create_assignment' %}", {
     course_id: {{ selected_course.id }},
     assessment_type: type, title, description: desc,
-    due_date: due, total_marks: parseInt(document.getElementById('aMarks').value)||0, questions
+    due_date:             due,
+    grace_period_hours:   parseInt(document.getElementById('aGraceHours').value)   || 0,
+    late_deduction_type:  document.getElementById('aDeductType').value,
+    late_deduction_value: parseFloat(document.getElementById('aDeductValue').value) || 0,
+    max_late_days:        parseInt(document.getElementById('aMaxLateDays').value)   || 0,
+    total_marks: parseInt(document.getElementById('aMarks').value)||0, questions
   });
 
   if (data.success) {
@@ -505,6 +554,31 @@ async function deleteAssessment(id) {
   });
   const data = await res.json();
   if (data.success) document.getElementById(`asgn-${id}`).remove();
+}
+
+// ── Grace Period helpers ──────────────────────────────────────────────────
+function updateDeductLabel() {
+  const type = document.getElementById('aDeductType').value;
+  document.getElementById('deductValueLabel').textContent =
+    type === 'percent' ? 'Deduction per day (%)' : 'Deduction per day (marks)';
+}
+
+function updateGracePreview() {
+  const grace   = parseInt(document.getElementById('aGraceHours').value)   || 0;
+  const maxDays = parseInt(document.getElementById('aMaxLateDays').value)   || 0;
+  const type    = document.getElementById('aDeductType').value;
+  const val     = parseFloat(document.getElementById('aDeductValue').value) || 0;
+  const preview = document.getElementById('gracePolicyPreview');
+  if (grace === 0 && maxDays === 0 && val === 0) {
+    preview.style.display = 'none'; return;
+  }
+  let msg = '';
+  if (grace > 0)    msg += `✓ ${grace}h grace period after due date. `;
+  if (maxDays > 0)  msg += `✓ Late accepted up to ${maxDays} day(s). `;
+  else if (grace>0) msg += `✓ No late submissions after grace period. `;
+  if (val > 0)      msg += `✓ ${val}${type === 'percent' ? '%' : ' marks'} deducted per late day.`;
+  preview.textContent   = msg;
+  preview.style.display = msg ? 'block' : 'none';
 }
 </script>
 {% endif %}

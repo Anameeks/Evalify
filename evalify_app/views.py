@@ -7,6 +7,7 @@ from collections import defaultdict
 import json
 from .models import (User, Course, CLO, PLO, Assessment, Question,Enrollment, Submission, QuestionGrade, Announcement, StudyMaterial, Notification )
 from .notifications import (notify_grade_released, notify_new_assignment, notify_new_material, notify_announcement)
+from .grace_period import check_submission_window, apply_late_deduction, recalculate_final_score
 
 
 #Home Redirect 
@@ -339,7 +340,9 @@ def grade_submission(request, sub_id):
         sub.feedback    = data.get('feedback', '')
         sub.status      = status
         sub.save()
- 
+
+        recalculate_final_score(sub)
+
         if not was_graded_before:
             notify_grade_released(sub)
  
@@ -866,6 +869,10 @@ def create_assignment(request):
             due_date=due_date,
             status=status,
             total_marks=0,
+            grace_period_hours   = int(data.get('grace_period_hours', 0)),
+            late_deduction_type  = data.get('late_deduction_type', 'percent'),
+            late_deduction_value = float(data.get('late_deduction_value', 0)),
+            max_late_days        = int(data.get('max_late_days', 0)),
         )
         total = 0
         for i, q in enumerate(data.get('questions', []), 1):
@@ -938,7 +945,11 @@ def student_assignments(request):
         s.assessment_id: s
         for s in Submission.objects.filter(student=request.user, assessment__in=assessments)
     }
-    assignments_with_status = [(a, submissions.get(a.id)) for a in assessments]
+    assignments_with_status = []
+    for a in assessments:
+        sub    = submissions.get(a.id)
+        window = check_submission_window(a) if not sub else None
+        assignments_with_status.append((a, sub, window))
     return render(request, 'student/assignments.html', {
         'assignments_with_status': assignments_with_status,
     })
@@ -951,18 +962,29 @@ def submit_assignment(request, assignment_id):
         return JsonResponse({'error': 'You are not enrolled in this course.'}, status=403)
     if Submission.objects.filter(student=request.user, assessment=assignment).exists():
         return JsonResponse({'error': 'You have already submitted this assignment.'}, status=400)
+
+    # ── Submission window check ────────────────────────────────────────
+    window = check_submission_window(assignment)
+    if not window['can_submit']:
+        return JsonResponse({'error': window['window_msg']}, status=403)
+
     if request.method == 'POST':
-        content = request.POST.get('content', '').strip()
+        content       = request.POST.get('content', '').strip()
         uploaded_file = request.FILES.get('submitted_file')
         if not content and not uploaded_file:
             return JsonResponse({'error': 'Please provide an answer or upload a file.'}, status=400)
-        Submission.objects.create(
+        sub = Submission.objects.create(
             student=request.user,
             assessment=assignment,
             content=content,
             submitted_file=uploaded_file,
         )
-        return JsonResponse({'success': True})
+        apply_late_deduction(sub)
+        return JsonResponse({
+            'success':    True,
+            'is_late':    window['is_late'],
+            'window_msg': window['window_msg'],
+        })
     return JsonResponse({'error': 'POST required'}, status=400)
 
 
