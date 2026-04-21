@@ -72,6 +72,12 @@ class Assessment(models.Model):
     status = models.CharField(max_length=20, default='published')
     total_marks = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+    # ── Grace period fields ───────────────────────────────────────────────
+    grace_period_hours   = models.IntegerField(default=0)
+    late_deduction_type  = models.CharField(max_length=10, default='percent',
+                               choices=[('percent','Percent'),('flat','Flat Marks')])
+    late_deduction_value = models.FloatField(default=0)
+    max_late_days        = models.IntegerField(default=0)
 
     def __str__(self):
         return f"{self.title} ({self.course.code})"
@@ -114,6 +120,11 @@ class Submission(models.Model):
     feedback = models.TextField(blank=True)
     plagiarism_score = models.FloatField(default=0)
     ai_content_score = models.FloatField(default=0)
+    # ── Late submission tracking ──────────────────────────────────────────
+    is_late       = models.BooleanField(default=False)
+    hours_late    = models.FloatField(default=0)
+    late_deduction = models.FloatField(default=0)
+    final_score   = models.FloatField(default=0)
 
     class Meta:
         unique_together = ('student', 'assessment')
