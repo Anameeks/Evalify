@@ -3,6 +3,7 @@ from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.http import JsonResponse
 from django.db.models import Count
+from collections import defaultdict
 import json
 from .models import (User, Course, CLO, PLO, Assessment, Question,Enrollment, Submission, QuestionGrade, Announcement, StudyMaterial, Notification )
 from .notifications import (notify_grade_released, notify_new_assignment, notify_new_material, notify_announcement)
@@ -354,6 +355,8 @@ def faculty_analytics(request):
     clo_attainment = []
     weak_students = []
     integrity_data = {'clean': 0, 'ai_flag': 0, 'plagiarism': 0}
+    student_clo_data = []
+    plo_attainment = []
 
     course_id = request.GET.get('course')
     if course_id:
@@ -383,6 +386,45 @@ def faculty_analytics(request):
             attainment = round((total_obtained / total_possible * 100) if total_possible > 0 else 0, 1)
             clo_attainment.append({'code': clo.code, 'attainment': attainment})
 
+        # Per-student average CLO attainment
+        for enrollment in Enrollment.objects.filter(course=selected_course).select_related('student'):
+            student = enrollment.student
+            s_subs = graded_subs.filter(student=student)
+            if not s_subs.exists():
+                continue
+            clo_atts = []
+            for clo in selected_course.clos.all():
+                q_ids = list(Question.objects.filter(assessment__in=assessments, clos=clo).values_list('id', flat=True))
+                if not q_ids:
+                    continue
+                qgs = QuestionGrade.objects.filter(question_id__in=q_ids, submission__in=s_subs)
+                tp = sum(Question.objects.get(id=qid).max_marks for qid in q_ids)
+                to = sum(g.marks_obtained for g in qgs)
+                if tp > 0:
+                    clo_atts.append(to / tp * 100)
+            if clo_atts:
+                student_clo_data.append({
+                    'name': (student.full_name or student.username)[:20],
+                    'attainment': round(sum(clo_atts) / len(clo_atts), 1)
+                })
+
+        # PLO attainment aggregated across all graded submissions
+        plo_agg = defaultdict(lambda: {'obtained': 0.0, 'total': 0.0, 'plo': None})
+        for clo in selected_course.clos.all():
+            q_ids = list(Question.objects.filter(assessment__in=assessments, clos=clo).values_list('id', flat=True))
+            qgs = QuestionGrade.objects.filter(question_id__in=q_ids, submission__in=graded_subs)
+            tp = sum(Question.objects.get(id=qid).max_marks for qid in q_ids) * max(graded_subs.count(), 1)
+            to = sum(g.marks_obtained for g in qgs)
+            for plo in clo.plos.all():
+                if plo_agg[plo.id]['plo'] is None:
+                    plo_agg[plo.id]['plo'] = plo
+                plo_agg[plo.id]['obtained'] += to
+                plo_agg[plo.id]['total'] += tp
+        for pid, pd in plo_agg.items():
+            p = pd['plo']
+            att = round((pd['obtained'] / pd['total'] * 100) if pd['total'] > 0 else 0, 1)
+            plo_attainment.append({'code': p.code, 'description': p.description, 'attainment': att})
+
         for sub in graded_subs:
             if sub.assessment.total_marks > 0:
                 pct = round(sub.total_score / sub.assessment.total_marks * 100, 1)
@@ -407,6 +449,10 @@ def faculty_analytics(request):
         'clo_attainment_list': clo_attainment,
         'weak_students': weak_students,
         'integrity_data': json.dumps(integrity_data),
+        'student_clo_data': json.dumps(student_clo_data),
+        'student_clo_list': student_clo_data,
+        'plo_attainment': json.dumps(plo_attainment),
+        'plo_attainment_list': plo_attainment,
     })
 
 
@@ -563,6 +609,7 @@ def student_clo_results(request):
         elif avg_pct >= 40: grade = 'D'
 
         clo_results = []
+        plo_agg = defaultdict(lambda: {'obtained': 0.0, 'total': 0.0, 'plo': None})
         for clo in course.clos.all():
             q_ids = list(Question.objects.filter(assessment__in=assessments, clos=clo).values_list('id', flat=True))
             qgs = QuestionGrade.objects.filter(question_id__in=q_ids, submission__in=subs)
@@ -575,10 +622,23 @@ def student_clo_results(request):
                 'obtained': int(total_obtained), 'total': int(total_possible),
                 'attainment': attainment
             })
+            for plo in clo.plos.all():
+                if plo_agg[plo.id]['plo'] is None:
+                    plo_agg[plo.id]['plo'] = plo
+                plo_agg[plo.id]['obtained'] += total_obtained
+                plo_agg[plo.id]['total'] += total_possible
+
+        plo_results = []
+        for pid, data in plo_agg.items():
+            plo = data['plo']
+            att = round((data['obtained'] / data['total'] * 100) if data['total'] > 0 else 0, 1)
+            plo_results.append({'code': plo.code, 'description': plo.description, 'attainment': att})
+
         results.append({
             'course': course, 'grade': grade,
             'avg_pct': avg_pct, 'graded_count': subs.count(),
             'clo_results': clo_results,
+            'plo_results': plo_results,
         })
     return render(request, 'student/clo_results.html', {'results': results})
 

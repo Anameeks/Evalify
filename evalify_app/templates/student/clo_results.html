@@ -1,0 +1,291 @@
+{% extends 'student/base.html' %}
+{% block nav_results %}active{% endblock %}
+
+{% block content %}
+<style>
+.grade-badge{display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:12px;font-size:18px;font-weight:800;flex-shrink:0;}
+.grade-A\+,.grade-A,.grade-A-{background:linear-gradient(135deg,#10b981,#059669);color:#fff;}
+.grade-B\+,.grade-B,.grade-B-{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;}
+.grade-C\+,.grade-C{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;}
+.grade-D{background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;}
+.grade-F{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;}
+.course-card{background:#fff;border-radius:14px;border:1px solid var(--border);padding:24px;margin-bottom:24px;}
+.course-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;}
+.course-title{font-size:18px;font-weight:700;}
+.course-meta{font-size:13px;color:var(--gray);margin-top:3px;}
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;}
+.chart-panel{background:#f9fafb;border-radius:10px;padding:16px;}
+.chart-label{font-size:12px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}
+.chart-wrap{position:relative;height:260px;}
+.section-label{font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;}
+.att-row{margin-bottom:12px;}
+.att-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}
+.att-code{font-size:13px;font-weight:700;}
+.att-desc{font-size:11px;color:var(--gray);margin-left:6px;}
+.bloom-tag{display:inline-block;padding:1px 7px;border-radius:4px;font-size:10px;font-weight:600;background:#fef3c7;color:#92400e;margin-left:6px;}
+.level-pill{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;white-space:nowrap;}
+.level-excellent{background:#d1fae5;color:#065f46;}
+.level-good{background:#ccfbf1;color:#0f766e;}
+.level-developing{background:#fef3c7;color:#92400e;}
+.level-needs{background:#fee2e2;color:#991b1b;}
+.progress-fill.green{background:var(--green);}
+.divider{height:1px;background:var(--border);margin:18px 0;}
+.legend-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray);}
+.legend-dot{width:10px;height:10px;border-radius:50%;}
+.no-data{height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--light);font-size:13px;gap:6px;}
+.empty{text-align:center;padding:64px 20px;}
+.empty-icon{font-size:48px;margin-bottom:12px;}
+.empty-title{font-size:18px;font-weight:700;margin-bottom:6px;}
+</style>
+
+<div class="page-title">My Learning Analytics</div>
+<div class="page-sub">Visual overview of your CLO &amp; PLO attainment across all enrolled courses.</div>
+
+<!-- Legend -->
+<div class="legend-row">
+  <div class="legend-item"><div class="legend-dot" style="background:#10b981;"></div> Excellent</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#20b2aa;"></div> Good</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f59e0b;"></div> Developing</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#ef4444;"></div> Needs Attention</div>
+</div>
+
+{% if results %}
+  {% for item in results %}
+  <div class="course-card">
+
+    <!-- Course header -->
+    <div class="course-hdr">
+      <div>
+        <div class="course-title">{{ item.course.code }}: {{ item.course.name }}</div>
+        <div class="course-meta">
+          {{ item.graded_count }} graded assessment{{ item.graded_count|pluralize }}
+          &nbsp;·&nbsp; Semester {{ item.course.semester }}
+        </div>
+      </div>
+      <div class="grade-badge grade-{{ item.grade }}">{{ item.grade }}</div>
+    </div>
+
+    {% if item.graded_count > 0 %}
+
+    <!-- Charts -->
+    <div class="charts-row">
+      <div class="chart-panel">
+        <div class="chart-label">CLO Attainment</div>
+        {% if item.clo_results %}
+          <div class="chart-wrap">
+            <canvas id="cloChart{{ forloop.counter }}"></canvas>
+          </div>
+        {% else %}
+          <div class="no-data"><span style="font-size:28px;">📋</span><span>No CLOs defined yet</span></div>
+        {% endif %}
+      </div>
+
+      <div class="chart-panel">
+        <div class="chart-label">PLO Attainment</div>
+        {% if item.plo_results %}
+          <div class="chart-wrap">
+            <canvas id="ploChart{{ forloop.counter }}"></canvas>
+          </div>
+        {% else %}
+          <div class="no-data"><span style="font-size:28px;">🎯</span><span>No PLOs mapped yet</span></div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- CLO breakdown -->
+    {% if item.clo_results %}
+    <div class="section-label">CLO Breakdown</div>
+    {% for clo in item.clo_results %}
+    <div class="att-row">
+      <div class="att-hdr">
+        <div>
+          <span class="att-code">{{ clo.code }}</span>
+          <span class="bloom-tag">{{ clo.bloom }}</span>
+          <span class="att-desc">{{ clo.description|truncatechars:60 }}</span>
+        </div>
+        <span class="level-pill {% if clo.attainment >= 80 %}level-excellent{% elif clo.attainment >= 60 %}level-good{% elif clo.attainment >= 40 %}level-developing{% else %}level-needs{% endif %}">
+          {% if clo.attainment >= 80 %}Excellent{% elif clo.attainment >= 60 %}Good{% elif clo.attainment >= 40 %}Developing{% else %}Needs Attention{% endif %}
+        </span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill {% if clo.attainment >= 80 %}green{% elif clo.attainment >= 60 %}{% else %}{% if clo.attainment >= 40 %}orange{% else %}red{% endif %}{% endif %}"
+             style="width:{{ clo.attainment }}%;transition:width .6s ease;"></div>
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- PLO breakdown -->
+    {% if item.plo_results %}
+    <div class="divider"></div>
+    <div class="section-label">PLO Breakdown</div>
+    {% for plo in item.plo_results %}
+    <div class="att-row">
+      <div class="att-hdr">
+        <div>
+          <span class="att-code">{{ plo.code }}</span>
+          <span class="att-desc">{{ plo.description|truncatechars:60 }}</span>
+        </div>
+        <span class="level-pill {% if plo.attainment >= 80 %}level-excellent{% elif plo.attainment >= 60 %}level-good{% elif plo.attainment >= 40 %}level-developing{% else %}level-needs{% endif %}">
+          {% if plo.attainment >= 80 %}Excellent{% elif plo.attainment >= 60 %}Good{% elif plo.attainment >= 40 %}Developing{% else %}Needs Attention{% endif %}
+        </span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill {% if plo.attainment >= 80 %}green{% elif plo.attainment >= 40 %}orange{% else %}red{% endif %}"
+             style="width:{{ plo.attainment }}%;transition:width .6s ease;"></div>
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% else %}
+    <!-- No graded submissions yet -->
+    <div style="text-align:center;padding:32px 0;">
+      <div style="font-size:36px;margin-bottom:10px;">📊</div>
+      <div style="font-size:14px;font-weight:600;color:var(--text);">No graded assessments yet</div>
+      <div style="font-size:12px;color:var(--gray);margin-top:4px;">Submit assessments and wait for your teacher to grade them.</div>
+    </div>
+    {% endif %}
+
+  </div>
+  {% endfor %}
+
+{% else %}
+<div class="empty">
+  <div class="empty-icon">📊</div>
+  <div class="empty-title">No Courses Yet</div>
+  <div style="font-size:13px;color:var(--gray);">Enroll in courses to see your learning analytics here.</div>
+  <a href="{% url 'student_courses' %}" class="btn btn-primary" style="margin-top:18px;">Browse Courses</a>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function getColor(v){
+  if(v>=80) return '#10b981';
+  if(v>=60) return '#20b2aa';
+  if(v>=40) return '#f59e0b';
+  return '#ef4444';
+}
+
+const BAR_PALETTE = [
+  '#4472C4','#ED7D31','#70AD47','#7030A0','#00B0F0',
+  '#FFC000','#FF0000','#00B050','#C00000','#993366'
+];
+
+{% for item in results %}
+{% if item.clo_results %}
+(function(){
+  const el = document.getElementById('cloChart{{ forloop.counter }}');
+  if(!el) return;
+  const codes  = [{% for c in item.clo_results %}'{{ c.code }}'{% if not forloop.last %},{% endif %}{% endfor %}];
+  const values = [{% for c in item.clo_results %}{{ c.attainment }}{% if not forloop.last %},{% endif %}{% endfor %}];
+  new Chart(el, {
+    type: 'bar',
+    data: {
+      labels: ['{{ item.course.semester }}'],
+      datasets: codes.map((code, i) => ({
+        label: code,
+        data: [values[i]],
+        backgroundColor: BAR_PALETTE[i % BAR_PALETTE.length],
+        borderRadius: 3,
+        barPercentage: 0.75,
+      }))
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: ['CLO Attainment, {{ item.course.code }},', 'Semester'],
+          font: { size: 11, weight: '600' },
+          color: '#374151',
+          padding: { bottom: 6 }
+        },
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: { boxWidth: 12, font: { size: 10 }, padding: 6 }
+        },
+        tooltip: {
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw.toFixed(2)}%` }
+        }
+      },
+      scales: {
+        y: {
+          min: 0, max: 120,
+          ticks: { font: { size: 10 }, stepSize: 20, color: '#6b7280' },
+          grid: { color: '#e5e7eb' }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 11 }, color: '#374151' }
+        }
+      }
+    }
+  });
+})();
+{% endif %}
+
+{% if item.plo_results %}
+(function(){
+  const el = document.getElementById('ploChart{{ forloop.counter }}');
+  if(!el) return;
+  const codes  = [{% for p in item.plo_results %}'{{ p.code }}'{% if not forloop.last %},{% endif %}{% endfor %}];
+  const values = [{% for p in item.plo_results %}{{ p.attainment }}{% if not forloop.last %},{% endif %}{% endfor %}];
+  const maxVal = Math.max(...values, 10);
+  const yMax   = Math.ceil(maxVal / 10) * 10 + 10;
+  new Chart(el, {
+    type: 'bar',
+    data: {
+      labels: ['{{ item.course.semester }}'],
+      datasets: codes.map((code, i) => ({
+        label: code,
+        data: [values[i]],
+        backgroundColor: BAR_PALETTE[i % BAR_PALETTE.length],
+        borderRadius: 3,
+        barPercentage: 0.75,
+      }))
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: ['PLO Attainment, {{ item.course.code }},', 'Semester'],
+          font: { size: 11, weight: '600' },
+          color: '#374151',
+          padding: { bottom: 6 }
+        },
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: { boxWidth: 12, font: { size: 10 }, padding: 6 }
+        },
+        tooltip: {
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw.toFixed(2)}%` }
+        }
+      },
+      scales: {
+        y: {
+          min: 0, max: yMax,
+          ticks: { font: { size: 10 }, stepSize: 10, color: '#6b7280' },
+          grid: { color: '#e5e7eb' }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 11 }, color: '#374151' }
+        }
+      }
+    }
+  });
+})();
+{% endif %}
+{% endfor %}
+</script>
+{% endblock %}
