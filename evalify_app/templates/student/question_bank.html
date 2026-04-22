@@ -1,0 +1,107 @@
+{% extends 'student/base.html' %}
+{% block nav_question_bank %}active{% endblock %}
+
+{% block content %}
+<div class="page-title">Question Bank</div>
+<div class="page-sub">Browse previous semester papers — {{ total_count }} paper{{ total_count|pluralize }} available</div>
+
+<!-- Search & Filter -->
+<form method="get" style="margin-bottom:20px;">
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+    <div style="flex:1;min-width:200px;position:relative;">
+      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--light);">🔍</span>
+      <input type="text" name="q" value="{{ search }}" class="form-control"
+             style="padding-left:32px;" placeholder="Search questions, topics, course...">
+    </div>
+    <select name="course" class="form-control" style="width:130px;">
+      <option value="">All Courses</option>
+      {% for cc in course_codes %}
+      <option value="{{ cc }}" {% if course_code == cc %}selected{% endif %}>{{ cc }}</option>
+      {% endfor %}
+    </select>
+    <select name="type" class="form-control" style="width:130px;">
+      <option value="">All Types</option>
+      <option value="mid"        {% if exam_type == 'mid' %}selected{% endif %}>Mid Exam</option>
+      <option value="final"      {% if exam_type == 'final' %}selected{% endif %}>Final Exam</option>
+      <option value="ct"         {% if exam_type == 'ct' %}selected{% endif %}>Class Test</option>
+      <option value="quiz"       {% if exam_type == 'quiz' %}selected{% endif %}>Quiz</option>
+      <option value="assignment" {% if exam_type == 'assignment' %}selected{% endif %}>Assignment</option>
+    </select>
+    <select name="semester" class="form-control" style="width:130px;">
+      <option value="">All Semesters</option>
+      {% for s in semesters %}
+      <option value="{{ s }}" {% if semester == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <select name="difficulty" class="form-control" style="width:120px;">
+      <option value="">Any Difficulty</option>
+      <option value="easy"   {% if difficulty == 'easy' %}selected{% endif %}>Easy</option>
+      <option value="medium" {% if difficulty == 'medium' %}selected{% endif %}>Medium</option>
+      <option value="hard"   {% if difficulty == 'hard' %}selected{% endif %}>Hard</option>
+    </select>
+    <button type="submit" class="btn btn-primary">Filter</button>
+    {% if search or exam_type or semester or course_code or difficulty %}
+    <a href="{% url 'student_question_bank' %}" class="btn btn-outline">✕ Clear</a>
+    {% endif %}
+  </div>
+</form>
+
+{% if papers %}
+{% for paper in papers %}
+<div class="list-item" style="cursor:pointer;"
+     onclick="window.location.href='{% url 'student_view_paper' paper.id %}'">
+  <div class="list-icon" style="font-size:20px;
+    background:{% if paper.exam_type == 'mid' %}#fde68a{% elif paper.exam_type == 'final' %}#fee2e2
+               {% elif paper.exam_type == 'quiz' %}#fef9c3{% elif paper.exam_type == 'ct' %}#d1fae5
+               {% else %}#dbeafe{% endif %};">
+    {% if paper.exam_type == 'mid' %}📖{% elif paper.exam_type == 'final' %}🎓
+    {% elif paper.exam_type == 'quiz' %}❓{% elif paper.exam_type == 'ct' %}✏️{% else %}📝{% endif %}
+  </div>
+  <div class="list-body">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span class="list-title">{{ paper.title }}</span>
+      <span class="tag" style="
+        {% if paper.exam_type == 'mid' %}background:#fde68a;color:#92400e;
+        {% elif paper.exam_type == 'final' %}background:#fee2e2;color:#991b1b;
+        {% elif paper.exam_type == 'quiz' %}background:#fef9c3;color:#854d0e;
+        {% elif paper.exam_type == 'ct' %}background:#d1fae5;color:#065f46;
+        {% else %}background:#dbeafe;color:#1d4ed8;{% endif %}">
+        {{ paper.get_exam_type_display }}
+      </span>
+    </div>
+    <div class="list-meta">
+      <strong>{{ paper.course_code }}</strong>: {{ paper.course_name }}
+      &nbsp;·&nbsp; {{ paper.semester }}
+      &nbsp;·&nbsp; {{ paper.total_marks }} marks
+      &nbsp;·&nbsp; {{ paper.questions.count }} question{{ paper.questions.count|pluralize }}
+      {% if paper.duration_mins %}&nbsp;·&nbsp; {{ paper.duration_mins }} mins{% endif %}
+    </div>
+    {% if paper.description %}
+    <div style="font-size:12px;color:var(--gray);margin-top:2px;">{{ paper.description|truncatechars:100 }}</div>
+    {% endif %}
+    <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;">
+      {% for q in paper.questions.all %}{% if q.topic_tag %}
+      <span class="tag" style="background:#f3f4f6;color:#374151;font-size:10px;">{{ q.topic_tag }}</span>
+      {% endif %}{% endfor %}
+    </div>
+  </div>
+  <span style="color:var(--teal);font-size:18px;flex-shrink:0;">›</span>
+</div>
+{% endfor %}
+
+{% else %}
+<div class="empty">
+  <div class="empty-icon">📚</div>
+  <div class="empty-title">
+    {% if search or exam_type or semester or course_code or difficulty %}
+    No papers match your filters
+    {% else %}No past papers available yet{% endif %}
+  </div>
+  <p style="font-size:13px;">
+    {% if search or exam_type or semester or course_code or difficulty %}
+    Try different filters or <a href="{% url 'student_question_bank' %}" style="color:var(--teal);">clear all</a>.
+    {% else %}Past papers will appear here once your faculty uploads them.{% endif %}
+  </p>
+</div>
+{% endif %}
+{% endblock %}

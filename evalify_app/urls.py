@@ -56,4 +56,15 @@ urlpatterns = [
     path('student/notifications/mark-all-read/',views.mark_all_read,         name='mark_all_read'),
     path('student/assignments/', views.student_assignments, name='student_assignments'),
     path('student/assignments/<int:assignment_id>/submit/', views.submit_assignment, name='submit_assignment'),
+
+    # Question Bank — Faculty
+    path('faculty/question-bank/',                        views.faculty_question_bank,   name='faculty_question_bank'),
+    path('faculty/question-bank/create/',                 views.create_past_paper,       name='create_past_paper'),
+    path('faculty/question-bank/<int:paper_id>/delete/',  views.delete_past_paper,       name='delete_past_paper'),
+    path('faculty/question-bank/<int:paper_id>/toggle/',  views.toggle_paper_visibility, name='toggle_paper_visibility'),
+    path('faculty/question-bank/hint/<int:question_id>/', views.toggle_hint_visibility,  name='toggle_hint_visibility'),
+
+    # Question Bank — Student
+    path('student/question-bank/',                        views.student_question_bank,   name='student_question_bank'),
+    path('student/question-bank/<int:paper_id>/',         views.student_view_paper,      name='student_view_paper'),
 ]

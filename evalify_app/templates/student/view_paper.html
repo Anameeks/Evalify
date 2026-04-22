@@ -1,0 +1,124 @@
+{% extends 'student/base.html' %}
+{% block nav_question_bank %}active{% endblock %}
+
+{% block content %}
+
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:22px;font-size:13px;">
+  <a href="{% url 'student_question_bank' %}"
+     style="color:var(--gray);text-decoration:none;padding:5px 12px;border:1px solid var(--border);
+            border-radius:6px;background:#fff;"
+     onmouseover="this.style.color='var(--teal)';this.style.borderColor='var(--teal)';"
+     onmouseout="this.style.color='var(--gray)';this.style.borderColor='var(--border)';">← Back</a>
+  <span style="color:var(--light);">/</span>
+  <span style="color:var(--gray);">Question Bank</span>
+  <span style="color:var(--light);">/</span>
+  <span style="font-weight:600;">{{ paper.title }}</span>
+</div>
+
+<!-- Paper Header -->
+<div style="background:#fff;border:1px solid var(--border);border-radius:12px;
+            padding:22px 24px;margin-bottom:24px;">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+    <div>
+      <div style="font-size:22px;font-weight:800;margin-bottom:6px;">{{ paper.title }}</div>
+      <div style="font-size:14px;color:var(--gray);display:flex;gap:16px;flex-wrap:wrap;">
+        <span>📖 <strong>{{ paper.course_code }}</strong>: {{ paper.course_name }}</span>
+        <span>📅 {{ paper.semester }}</span>
+        <span>📋 {{ paper.get_exam_type_display }}</span>
+        {% if paper.total_marks %}<span>🏆 {{ paper.total_marks }} marks</span>{% endif %}
+        {% if paper.duration_mins %}<span>⏱ {{ paper.duration_mins }} minutes</span>{% endif %}
+      </div>
+      {% if paper.description %}
+      <div style="font-size:13px;color:var(--gray);margin-top:8px;">{{ paper.description }}</div>
+      {% endif %}
+    </div>
+    <div style="text-align:right;flex-shrink:0;">
+      <div style="font-size:30px;font-weight:800;color:var(--teal);">{{ questions|length }}</div>
+      <div style="font-size:12px;color:var(--gray);">Questions</div>
+    </div>
+  </div>
+</div>
+
+<!-- Difficulty filter -->
+<div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;align-items:center;">
+  <span style="font-size:13px;color:var(--gray);font-weight:500;">Filter:</span>
+  <button class="q-filter active" data-f="all"    onclick="filterQ('all',this)">All</button>
+  <button class="q-filter"        data-f="easy"   onclick="filterQ('easy',this)">🟢 Easy</button>
+  <button class="q-filter"        data-f="medium" onclick="filterQ('medium',this)">🟡 Medium</button>
+  <button class="q-filter"        data-f="hard"   onclick="filterQ('hard',this)">🔴 Hard</button>
+</div>
+
+<style>
+.q-filter {
+  padding:5px 14px; border-radius:20px; font-size:12px; font-weight:500;
+  cursor:pointer; border:1px solid var(--border); background:#fff;
+  color:var(--gray); transition:all .2s; font-family:inherit;
+}
+.q-filter.active, .q-filter:hover { background:var(--sidebar); color:#fff; border-color:var(--sidebar); }
+</style>
+
+<!-- Questions -->
+<div id="questionsList">
+{% for q in questions %}
+<div class="q-item" data-difficulty="{{ q.difficulty }}"
+     style="background:#fff;border:1px solid var(--border);border-radius:12px;
+            padding:20px 22px;margin-bottom:12px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+    <span style="font-size:14px;font-weight:800;color:var(--teal);">Q{{ q.order }}</span>
+    {% if q.marks %}
+    <span style="font-size:12px;font-weight:600;padding:2px 8px;border-radius:4px;background:#f3f4f6;color:var(--gray);">
+      {{ q.marks }} marks
+    </span>
+    {% endif %}
+    {% if q.topic_tag %}<span class="tag tag-clo">{{ q.topic_tag }}</span>{% endif %}
+    {% if q.difficulty %}
+    <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;
+      background:{% if q.difficulty == 'easy' %}#d1fae5{% elif q.difficulty == 'medium' %}#fef3c7{% else %}#fee2e2{% endif %};
+      color:{% if q.difficulty == 'easy' %}#065f46{% elif q.difficulty == 'medium' %}#92400e{% else %}#991b1b{% endif %};">
+      {{ q.get_difficulty_display }}
+    </span>
+    {% endif %}
+  </div>
+
+  <div style="font-size:15px;color:var(--text);line-height:1.6;">{{ q.text }}</div>
+
+  {% if q.show_hint and q.answer_hint %}
+  <div style="margin-top:14px;">
+    <button onclick="toggleHint(this)"
+            style="font-size:12px;color:var(--teal);background:none;border:none;
+                   cursor:pointer;padding:0;font-family:inherit;font-weight:600;">
+      💡 Show Model Answer ▼
+    </button>
+    <div class="hint-body" style="display:none;margin-top:8px;background:#f0fdf4;
+         border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px;
+         font-size:13px;color:#166534;line-height:1.6;">
+      {{ q.answer_hint }}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% empty %}
+<div class="empty"><div class="empty-icon">❓</div><div class="empty-title">No questions</div></div>
+{% endfor %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterQ(f, btn) {
+  document.querySelectorAll('.q-filter').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.style.display = (f === 'all' || item.dataset.difficulty === f) ? '' : 'none';
+  });
+}
+
+function toggleHint(btn) {
+  const body = btn.nextElementSibling;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  btn.textContent = open ? '💡 Show Model Answer ▼' : '💡 Hide Model Answer ▲';
+}
+</script>
+{% endblock %}

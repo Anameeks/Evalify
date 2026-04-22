@@ -227,6 +227,9 @@ body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); 
     <a href="{% url 'faculty_announcements' %}" class="{% block nav_announcements %}{% endblock %}">
       <span class="nav-icon"></span> Announcements
     </a>
+    <a href="{% url 'faculty_question_bank' %}" class="{% block nav_question_bank %}{% endblock %}">
+      <span class="nav-icon"></span> Question Bank
+    </a>
   </nav>
   <div class="sidebar-footer">
     <div class="user-name">{{ request.user.full_name|default:request.user.username }}</div>
