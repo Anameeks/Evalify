@@ -2,13 +2,191 @@
 {% block nav_question_bank %}active{% endblock %}
 
 {% block content %}
-<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;">
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
   <div>
     <div class="page-title">Question Bank</div>
-    <div class="page-sub">Upload previous semester papers for student access</div>
+    <div class="page-sub">Browse auto-collected assessment questions or upload past papers.</div>
   </div>
   <button class="btn btn-primary" onclick="openModal('createPaperModal')">+ Upload Past Paper</button>
 </div>
+
+<!-- ── Tab bar ─────────────────────────────────────────────── -->
+<div class="tab-bar" style="margin-bottom:20px;">
+  <button class="tab-btn active" id="tab-btn-bank"
+          onclick="switchTab('bank', this)">🗂 Assessment Questions</button>
+  <button class="tab-btn" id="tab-btn-papers"
+          onclick="switchTab('papers', this)">📚 Past Papers</button>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     TAB 1 — Assessment Questions (auto-collected)
+══════════════════════════════════════════════════════════════ -->
+<div id="tab-bank">
+
+{% if course_bank %}
+  {% for cb in course_bank %}
+  {# ── Course card ─────────────────────────────────────── #}
+  <div style="background:#fff;border:1px solid var(--border);border-radius:12px;
+              margin-bottom:16px;overflow:hidden;">
+
+    {# Card header — click to expand/collapse #}
+    <div style="display:flex;align-items:center;gap:14px;padding:16px 20px;cursor:pointer;
+                background:#f8fafc;border-bottom:1px solid var(--border);"
+         onclick="toggleCourse('cb-{{ cb.course.id }}', this)">
+      <span style="font-size:22px;">📚</span>
+      <div style="flex:1;">
+        <div style="font-size:15px;font-weight:700;">
+          {{ cb.course.code }}: {{ cb.course.name }}
+        </div>
+        <div style="font-size:12px;color:var(--gray);margin-top:2px;">
+          {{ cb.course.semester }}
+          &nbsp;·&nbsp; {{ cb.type_groups|length }} type{{ cb.type_groups|length|pluralize }}
+          &nbsp;·&nbsp;
+          <strong style="color:var(--teal);">{{ cb.total_q }}</strong> question{{ cb.total_q|pluralize }}
+        </div>
+      </div>
+      <span class="cb-chevron" style="font-size:16px;color:var(--gray);transition:transform .2s;">▼</span>
+    </div>
+
+    {# Collapsible body #}
+    <div id="cb-{{ cb.course.id }}" style="display:none;">
+      {% for grp in cb.type_groups %}
+      {# ── Type section ──────────────────────────────── #}
+      <div style="border-bottom:1px solid var(--border);">
+
+        {# Type header — click to expand/collapse #}
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 20px;cursor:pointer;
+                    background:#fffbeb;"
+             onclick="toggleType('type-{{ cb.course.id }}-{{ grp.type_key }}', this)">
+          <span style="font-size:16px;">
+            {% if grp.type_key == 'quiz' %}❓
+            {% elif grp.type_key == 'mid' %}📖
+            {% elif grp.type_key == 'ct' %}✏️
+            {% elif grp.type_key == 'final' %}🎓
+            {% elif grp.type_key == 'lab' %}🧪
+            {% elif grp.type_key == 'assignment' %}📝
+            {% else %}📄{% endif %}
+          </span>
+          <div style="flex:1;">
+            <span style="font-size:13px;font-weight:700;color:#92400e;">{{ grp.type_label }}</span>
+            <span style="font-size:11px;color:var(--gray);margin-left:8px;">
+              {{ grp.q_count }} question{{ grp.q_count|pluralize }}
+              across {{ grp.entries|length }} assessment{{ grp.entries|length|pluralize }}
+            </span>
+          </div>
+          <span class="type-chevron" style="font-size:13px;color:var(--gray);transition:transform .2s;">▼</span>
+        </div>
+
+        {# Questions body #}
+        <div id="type-{{ cb.course.id }}-{{ grp.type_key }}" style="display:none;">
+          {% for entry in grp.entries %}
+          {# ── Assessment header ──────────────────── #}
+          <div style="padding:10px 24px 4px;">
+            <div style="font-size:12px;font-weight:700;color:var(--teal);
+                        border-bottom:1px dashed var(--border);padding-bottom:6px;margin-bottom:8px;">
+              {{ entry.num_label }}: {{ entry.assessment.title }}
+              <span style="font-weight:400;color:var(--gray);margin-left:6px;">
+                {{ entry.assessment.total_marks }} marks
+                {% if entry.assessment.due_date %}· Due {{ entry.assessment.due_date }}{% endif %}
+                · <span style="font-size:11px;padding:1px 7px;border-radius:10px;
+                    background:{% if entry.assessment.status == 'published' %}#dcfce7{% else %}#fef3c7{% endif %};
+                    color:{% if entry.assessment.status == 'published' %}#166534{% else %}#92400e{% endif %};">
+                  {{ entry.assessment.status|title }}
+                </span>
+              </span>
+            </div>
+
+            {# Questions under this assessment #}
+            {% for q in entry.questions %}
+            <div style="background:#f8fafc;border:1px solid var(--border);border-radius:9px;
+                        padding:12px 14px;margin-bottom:10px;">
+
+              {# Question header row #}
+              <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:6px;">
+                <span style="font-size:11px;font-weight:700;color:var(--teal);
+                             background:#e0f5f4;padding:2px 8px;border-radius:6px;
+                             white-space:nowrap;">Q{{ q.order }}</span>
+                <div style="flex:1;">
+                  <div style="font-size:13px;font-weight:500;line-height:1.5;">{{ q.text }}</div>
+                  {% if q.image %}
+                  <img src="{{ q.image.url }}" style="max-width:100%;max-height:140px;margin-top:6px;
+                       border-radius:7px;border:1px solid var(--border);">
+                  {% endif %}
+                  {# CLO/PLO tags (question-level, aggregated from sub-questions) #}
+                  {% if q.clos.all or q.plos.all %}
+                  <div style="margin-top:5px;">
+                    {% for c in q.clos.all %}<span class="tag tag-clo">{{ c.code }}</span>{% endfor %}
+                    {% for p in q.plos.all %}<span class="tag tag-plo">{{ p.code }}</span>{% endfor %}
+                  </div>
+                  {% endif %}
+                </div>
+                <span style="font-size:12px;color:var(--gray);white-space:nowrap;flex-shrink:0;">
+                  {{ q.max_marks }} marks
+                </span>
+              </div>
+
+              {# Sub-questions #}
+              {% with subs=q.sub_questions.all %}
+              {% if subs %}
+              {% for sq in subs %}
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;
+                          padding:9px 12px;margin-top:7px;margin-left:16px;">
+                <div style="display:flex;align-items:flex-start;gap:8px;">
+                  <span style="font-size:11px;font-weight:700;color:#166534;
+                               white-space:nowrap;">
+                    Part {{ forloop.counter }}
+                  </span>
+                  <div style="flex:1;">
+                    <div style="font-size:12px;line-height:1.5;">{{ sq.text }}</div>
+                    {% if sq.image %}
+                    <img src="{{ sq.image.url }}" style="max-width:100%;max-height:120px;margin-top:5px;
+                         border-radius:6px;border:1px solid var(--border);">
+                    {% endif %}
+                    {% if sq.clos.all or sq.plos.all %}
+                    <div style="margin-top:4px;">
+                      {% for c in sq.clos.all %}<span class="tag tag-clo" style="font-size:10px;">{{ c.code }}</span>{% endfor %}
+                      {% for p in sq.plos.all %}<span class="tag tag-plo" style="font-size:10px;">{{ p.code }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+                  </div>
+                  <span style="font-size:11px;color:var(--gray);white-space:nowrap;flex-shrink:0;">
+                    {{ sq.max_marks }} marks
+                  </span>
+                </div>
+              </div>
+              {% endfor %}
+              {% endif %}
+              {% endwith %}
+
+            </div>{# end question card #}
+            {% endfor %}{# questions #}
+          </div>{# assessment body #}
+          {% endfor %}{# entries #}
+        </div>{# type body #}
+      </div>{# type section #}
+      {% endfor %}{# type_groups #}
+    </div>{# course body #}
+  </div>{# course card #}
+  {% endfor %}{# course_bank #}
+
+{% else %}
+  <div class="empty">
+    <div class="empty-icon">🗂</div>
+    <div class="empty-title">No questions yet</div>
+    <div style="font-size:13px;">
+      Questions from assessments you create will appear here automatically.
+    </div>
+  </div>
+{% endif %}
+
+</div>{# tab-bank #}
+
+
+<!-- ══════════════════════════════════════════════════════════
+     TAB 2 — Past Papers (existing, unchanged)
+══════════════════════════════════════════════════════════════ -->
+<div id="tab-papers" style="display:none;">
 
 {% if papers %}
 {% for paper in papers %}
@@ -19,7 +197,7 @@
       {% elif paper.exam_type == 'quiz' %}#fef9c3{% elif paper.exam_type == 'ct' %}#d1fae5
       {% else %}#dbeafe{% endif %};">
       {% if paper.exam_type == 'mid' %}📖{% elif paper.exam_type == 'final' %}🎓
-      {% elif paper.exam_type == 'quiz' %}{% elif paper.exam_type == 'ct' %}{% else %}📝{% endif %}
+      {% elif paper.exam_type == 'quiz' %}❓{% elif paper.exam_type == 'ct' %}✏️{% else %}📝{% endif %}
     </div>
     <div class="list-body">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -27,7 +205,7 @@
         <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;
           background:{% if paper.is_public %}#dcfce7{% else %}#fef3c7{% endif %};
           color:{% if paper.is_public %}#166534{% else %}#92400e{% endif %};">
-          {% if paper.is_public %}🌐 Public{% else %}Restricted{% endif %}
+          {% if paper.is_public %}🌐 Public{% else %}🔒 Restricted{% endif %}
         </span>
       </div>
       <div class="list-meta">
@@ -42,7 +220,7 @@
       <button class="btn btn-outline btn-sm" id="vis-btn-{{ paper.id }}"
               onclick="toggleVisibility({{ paper.id }}, this)"
               style="{% if paper.is_public %}color:var(--teal);border-color:var(--teal);{% else %}color:var(--orange);border-color:var(--orange);{% endif %}">
-        {% if paper.is_public %}👁 Public{% else %}Restricted{% endif %}
+        {% if paper.is_public %}👁 Public{% else %}🔒 Restricted{% endif %}
       </button>
       <button class="btn btn-outline btn-sm" style="color:var(--red);"
               onclick="deletePaper({{ paper.id }})">🗑</button>
@@ -85,7 +263,7 @@
                     border:1px solid {% if q.show_hint %}#bbf7d0{% else %}var(--border){% endif %};">
           💡 {{ q.answer_hint }}
           <span style="font-size:10px;opacity:.7;margin-left:6px;">
-            ({% if q.show_hint %}visible to students{% else %}hidden{% endif %})
+            ({% if q.show_hint %}visible{% else %}hidden{% endif %})
           </span>
         </div>
         {% endif %}
@@ -113,8 +291,10 @@
 </div>
 {% endif %}
 
+</div>{# tab-papers #}
 
-<!-- ══ Create Paper Modal ══ -->
+
+<!-- ══ Create Paper Modal (unchanged) ══ -->
 <div class="modal-overlay" id="createPaperModal">
   <div class="modal" style="max-width:680px;">
     <div class="modal-head">
@@ -223,6 +403,33 @@
 
 {% block scripts %}
 <script>
+// ── Tab switching ──────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-bank').style.display   = name === 'bank'   ? '' : 'none';
+  document.getElementById('tab-papers').style.display = name === 'papers' ? '' : 'none';
+}
+
+// ── Course card expand/collapse ────────────────────────────────────────────
+function toggleCourse(bodyId, headerEl) {
+  const body = document.getElementById(bodyId);
+  const chevron = headerEl.querySelector('.cb-chevron');
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+// ── Type section expand/collapse ───────────────────────────────────────────
+function toggleType(bodyId, headerEl) {
+  const body = document.getElementById(bodyId);
+  const chevron = headerEl.querySelector('.type-chevron');
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+// ── Past paper helpers (unchanged) ────────────────────────────────────────
 let bankQs = [];
 
 function toggleCourseAccess() {

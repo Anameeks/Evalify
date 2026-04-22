@@ -65,6 +65,8 @@ urlpatterns = [
     path('faculty/question-bank/hint/<int:question_id>/', views.toggle_hint_visibility,  name='toggle_hint_visibility'),
 
     # Question Bank — Student
-    path('student/question-bank/',                        views.student_question_bank,   name='student_question_bank'),
-    path('student/question-bank/<int:paper_id>/',         views.student_view_paper,      name='student_view_paper'),
+    path('student/question-bank/',                                           views.student_question_bank,  name='student_question_bank'),
+    path('student/question-bank/<int:paper_id>/',                            views.student_view_paper,     name='student_view_paper'),
+    path('student/question-bank/course/<int:course_id>/',                    views.student_qbank_course,   name='student_qbank_course'),
+    path('student/question-bank/course/<int:course_id>/<str:atype>/',        views.student_qbank_type,     name='student_qbank_type'),
 ]

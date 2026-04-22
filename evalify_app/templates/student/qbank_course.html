@@ -1,0 +1,61 @@
+{% extends 'student/base.html' %}
+{% block nav_question_bank %}active{% endblock %}
+
+{% block content %}
+
+<!-- Breadcrumb -->
+<div style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--gray);margin-bottom:18px;">
+  <a href="{% url 'student_question_bank' %}" style="color:var(--teal);text-decoration:none;">Question Bank</a>
+  <span>›</span>
+  <span style="color:var(--text);font-weight:600;">{{ course.code }}: {{ course.name }}</span>
+</div>
+
+<div class="page-title">{{ course.code }}: {{ course.name }}</div>
+<div class="page-sub">{{ course.semester }} &nbsp;·&nbsp; Select an assessment type to browse questions</div>
+
+{% if type_groups %}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-top:10px;">
+  {% for grp in type_groups %}
+  <a href="{% url 'student_qbank_type' course.id grp.type_key %}"
+     style="background:#fff;border:1px solid var(--border);border-radius:12px;
+            padding:20px;display:flex;flex-direction:column;gap:10px;
+            text-decoration:none;color:inherit;transition:box-shadow .2s,border-color .2s;"
+     onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,0.09)';this.style.borderColor='#20b2aa';"
+     onmouseout="this.style.boxShadow='none';this.style.borderColor='var(--border)';">
+
+    <div style="width:44px;height:44px;border-radius:10px;
+                background:{% if grp.type_key == 'quiz' %}#fef9c3{% elif grp.type_key == 'mid' %}#fde68a{% elif grp.type_key == 'ct' %}#d1fae5{% elif grp.type_key == 'final' %}#fee2e2{% elif grp.type_key == 'lab' %}#ede9fe{% elif grp.type_key == 'assignment' %}#dbeafe{% else %}#f3f4f6{% endif %};
+                display:flex;align-items:center;justify-content:center;font-size:22px;">
+      {% if grp.type_key == 'quiz' %}❓{% elif grp.type_key == 'mid' %}📖{% elif grp.type_key == 'ct' %}✏️{% elif grp.type_key == 'final' %}🎓{% elif grp.type_key == 'lab' %}🧪{% elif grp.type_key == 'assignment' %}📝{% else %}📄{% endif %}
+    </div>
+
+    <div>
+      <div style="font-size:16px;font-weight:700;
+                  color:{% if grp.type_key == 'quiz' %}#854d0e{% elif grp.type_key == 'mid' %}#92400e{% elif grp.type_key == 'ct' %}#065f46{% elif grp.type_key == 'final' %}#991b1b{% elif grp.type_key == 'lab' %}#5b21b6{% elif grp.type_key == 'assignment' %}#1d4ed8{% else %}#374151{% endif %};">
+        {{ grp.type_label }}
+      </div>
+      <div style="font-size:12px;color:var(--gray);margin-top:3px;">
+        {{ grp.a_count }} assessment{{ grp.a_count|pluralize }}
+        &nbsp;·&nbsp; {{ grp.q_count }} question{{ grp.q_count|pluralize }}
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:var(--teal);font-weight:500;margin-top:auto;">
+      Browse Questions →
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="empty" style="margin-top:40px;">
+  <div class="empty-icon">🗂</div>
+  <div class="empty-title">No questions available</div>
+  <p style="font-size:13px;color:var(--gray);">
+    No published assessments with questions found for this course yet.
+  </p>
+  <a href="{% url 'student_question_bank' %}" class="btn btn-outline" style="margin-top:12px;">← Back to Question Bank</a>
+</div>
+{% endif %}
+
+{% endblock %}

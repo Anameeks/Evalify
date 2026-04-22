@@ -1,0 +1,123 @@
+{% extends 'student/base.html' %}
+{% block nav_question_bank %}active{% endblock %}
+
+{% block content %}
+
+<!-- Breadcrumb -->
+<div style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--gray);margin-bottom:18px;flex-wrap:wrap;">
+  <a href="{% url 'student_question_bank' %}" style="color:var(--teal);text-decoration:none;">Question Bank</a>
+  <span>›</span>
+  <a href="{% url 'student_qbank_course' course.id %}" style="color:var(--teal);text-decoration:none;">{{ course.code }}: {{ course.name }}</a>
+  <span>›</span>
+  <span style="color:var(--text);font-weight:600;">{{ type_label }}</span>
+</div>
+
+<div class="page-title">{{ type_label }}</div>
+<div class="page-sub">{{ course.code }}: {{ course.name }} &nbsp;·&nbsp; {{ course.semester }}</div>
+
+{% if entries %}
+{% for entry in entries %}
+<div style="background:#fff;border:1px solid var(--border);border-radius:12px;
+            margin-bottom:20px;overflow:hidden;">
+
+  <!-- Assessment header -->
+  <div style="background:#f8fafc;border-bottom:1px solid var(--border);
+              padding:14px 20px;display:flex;align-items:center;gap:12px;">
+    <div style="flex:1;">
+      <div style="font-size:15px;font-weight:700;color:var(--teal);">{{ entry.label }}</div>
+      <div style="font-size:12px;color:var(--gray);margin-top:2px;">
+        {{ entry.assessment.title }}
+        &nbsp;·&nbsp; {{ entry.assessment.total_marks }} marks
+        {% if entry.assessment.due_date %}&nbsp;·&nbsp; Due {{ entry.assessment.due_date }}{% endif %}
+      </div>
+    </div>
+    <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px;
+                 background:#dcfce7;color:#166534;">Published</span>
+  </div>
+
+  <!-- Questions -->
+  <div style="padding:14px 20px;">
+    {% for q in entry.questions %}
+    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;
+                padding:14px 16px;margin-bottom:12px;">
+
+      <!-- Question header -->
+      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:6px;">
+        <span style="font-size:11px;font-weight:700;color:var(--teal);background:#e0f5f4;
+                     padding:2px 8px;border-radius:6px;white-space:nowrap;flex-shrink:0;">
+          Q{{ q.order }}
+        </span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:500;line-height:1.5;">{{ q.text }}</div>
+          {% if q.image %}
+          <img src="{{ q.image.url }}"
+               style="max-width:100%;max-height:200px;margin-top:8px;
+                      border-radius:8px;border:1px solid var(--border);">
+          {% endif %}
+          {% if q.clos.all or q.plos.all %}
+          <div style="margin-top:6px;">
+            {% for c in q.clos.all %}<span class="tag tag-clo">{{ c.code }}</span>{% endfor %}
+            {% for p in q.plos.all %}<span class="tag tag-plo">{{ p.code }}</span>{% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        <span style="font-size:12px;color:var(--gray);white-space:nowrap;flex-shrink:0;">
+          {{ q.max_marks }} mark{{ q.max_marks|pluralize }}
+        </span>
+      </div>
+
+      <!-- Sub-questions -->
+      {% with subs=q.sub_questions.all %}
+      {% if subs %}
+      {% for sq in subs %}
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;
+                  padding:10px 14px;margin-top:8px;margin-left:20px;">
+        <div style="display:flex;align-items:flex-start;gap:8px;">
+          <span style="font-size:11px;font-weight:700;color:#166534;
+                       white-space:nowrap;flex-shrink:0;">
+            Part {{ forloop.counter }}
+          </span>
+          <div style="flex:1;">
+            <div style="font-size:13px;line-height:1.5;">{{ sq.text }}</div>
+            {% if sq.image %}
+            <img src="{{ sq.image.url }}"
+                 style="max-width:100%;max-height:160px;margin-top:6px;
+                        border-radius:7px;border:1px solid var(--border);">
+            {% endif %}
+            {% if sq.clos.all or sq.plos.all %}
+            <div style="margin-top:4px;">
+              {% for c in sq.clos.all %}<span class="tag tag-clo" style="font-size:10px;">{{ c.code }}</span>{% endfor %}
+              {% for p in sq.plos.all %}<span class="tag tag-plo" style="font-size:10px;">{{ p.code }}</span>{% endfor %}
+            </div>
+            {% endif %}
+          </div>
+          <span style="font-size:11px;color:var(--gray);white-space:nowrap;flex-shrink:0;">
+            {{ sq.max_marks }} mark{{ sq.max_marks|pluralize }}
+          </span>
+        </div>
+      </div>
+      {% endfor %}
+      {% endif %}
+      {% endwith %}
+
+    </div>
+    {% endfor %}{# questions #}
+  </div>
+
+</div>{# assessment card #}
+{% endfor %}{# entries #}
+
+{% else %}
+<div class="empty" style="margin-top:40px;">
+  <div class="empty-icon">📄</div>
+  <div class="empty-title">No questions available</div>
+  <p style="font-size:13px;color:var(--gray);">
+    No published {{ type_label }} assessments with questions found yet.
+  </p>
+  <a href="{% url 'student_qbank_course' course.id %}" class="btn btn-outline" style="margin-top:12px;">
+    ← Back to {{ course.code }}
+  </a>
+</div>
+{% endif %}
+
+{% endblock %}

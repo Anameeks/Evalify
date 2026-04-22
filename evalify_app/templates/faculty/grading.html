@@ -153,6 +153,19 @@
     margin-bottom:12px;
   }
   .q-grade-card:last-child { margin-bottom:0; }
+  .sq-grade-card {
+    background:#f0fdf4;
+    border:1px solid #bbf7d0;
+    border-radius:8px;
+    padding:12px 14px;
+    margin-top:10px;
+  }
+  .sq-grade-card:first-child { margin-top:12px; }
+  .sq-part-label { font-size:11px; font-weight:700; color:#166534; margin-bottom:4px; }
+  .q-img-preview {
+    max-width:100%; max-height:160px; border-radius:8px;
+    border:1px solid var(--border); margin-top:6px; display:block;
+  }
   .q-grade-head {
     display:flex;
     justify-content:space-between;
@@ -322,34 +335,72 @@ async function openGrading(subId) {
   if (d.questions.length === 0) {
     html += `<div style="color:var(--gray);font-size:13px;padding:10px 0;">No questions defined for this assessment.</div>`;
   } else {
-    d.questions.forEach((q, idx) => {
-      const cloTags = q.clos.map(c => `<span class="clo-tag">${c.code}</span>`).join('');
-      const ploTags = q.plos.map(p => `<span class="plo-tag">${p.code}</span>`).join('');
-      html += `
-      <div class="q-grade-card">
-        <div class="q-grade-head">
-          <div>
-            <div style="font-size:11px;font-weight:700;color:var(--teal);margin-bottom:4px;">Q${q.order}</div>
-            <div class="q-grade-text">${escapeHtml(q.text)}</div>
-            ${(cloTags || ploTags) ? `<div style="margin-top:6px;">${cloTags}${ploTags}</div>` : ''}
-          </div>
+    const SQ_LBL = 'abcdefghijklmnopqrstuvwxyz'.split('');
+    d.questions.forEach(q => {
+      const hasSubs = q.sub_questions && q.sub_questions.length > 0;
+      html += `<div class="q-grade-card">`;
+      html += `<div class="q-grade-head">
+        <div style="flex:1;">
+          <div style="font-size:11px;font-weight:700;color:var(--teal);margin-bottom:4px;">Q${q.order}</div>
+          <div class="q-grade-text">${escapeHtml(q.text)}</div>`;
+      if (q.image_url) {
+        html += `<img src="${q.image_url}" class="q-img-preview">`;
+      }
+      // For questions WITHOUT sub-questions show CLO/PLO + marks input here
+      if (!hasSubs) {
+        const cloTags = q.clos.map(c => `<span class="clo-tag">${c.code}</span>`).join('');
+        const ploTags = q.plos.map(p => `<span class="plo-tag">${p.code}</span>`).join('');
+        if (cloTags || ploTags) html += `<div style="margin-top:6px;">${cloTags}${ploTags}</div>`;
+        html += `</div>
           <div>
             <div class="marks-wrap">
-              <input type="number"
-                     id="marks-${q.id}"
-                     value="${q.obtained}"
-                     min="0"
-                     max="${q.max_marks}"
-                     step="0.5"
-                     oninput="validateMark(this,${q.max_marks});recalcTotal();"
-                     style="width:62px;">
+              <input type="number" id="marks-${q.id}" value="${q.obtained}"
+                     min="0" max="${q.max_marks}" step="0.5"
+                     oninput="validateMark(this,${q.max_marks});recalcTotal();" style="width:62px;">
               <span class="sep">/</span>
               <span class="max-lbl">${q.max_marks}</span>
             </div>
             <div class="marks-warn" id="warn-${q.id}">Max: ${q.max_marks}</div>
-          </div>
-        </div>
-      </div>`;
+          </div>`;
+      } else {
+        html += `</div>`;  // close q-grade-head left col
+        html += `<div style="font-size:12px;color:var(--gray);">Total: <strong>${q.max_marks}</strong> marks</div>`;
+      }
+      html += `</div>`;  // close q-grade-head
+
+      // Sub-question cards
+      if (hasSubs) {
+        q.sub_questions.forEach((sq, si) => {
+          const lbl = SQ_LBL[si] || (si + 1);
+          const sqCloTags = sq.clos.map(c => `<span class="clo-tag">${c.code}</span>`).join('');
+          const sqPloTags = sq.plos.map(p => `<span class="plo-tag">${p.code}</span>`).join('');
+          html += `<div class="sq-grade-card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+              <div style="flex:1;">
+                <div class="sq-part-label">Part (${lbl})</div>
+                <div style="font-size:13px;font-weight:500;line-height:1.5;">${escapeHtml(sq.text)}</div>`;
+          if (sq.image_url) {
+            html += `<img src="${sq.image_url}" class="q-img-preview" style="max-height:120px;">`;
+          }
+          if (sqCloTags || sqPloTags) {
+            html += `<div style="margin-top:5px;">${sqCloTags}${sqPloTags}</div>`;
+          }
+          html += `</div>
+              <div>
+                <div class="marks-wrap">
+                  <input type="number" id="sqmarks-${sq.id}" value="${sq.obtained}"
+                         min="0" max="${sq.max_marks}" step="0.5"
+                         oninput="validateMark(this,${sq.max_marks});recalcTotal();" style="width:55px;">
+                  <span class="sep">/</span>
+                  <span class="max-lbl">${sq.max_marks}</span>
+                </div>
+                <div class="marks-warn" id="warn-sq-${sq.id}">Max: ${sq.max_marks}</div>
+              </div>
+            </div>
+          </div>`;
+        });
+      }
+      html += `</div>`;  // close q-grade-card
     });
   }
 
@@ -381,8 +432,15 @@ function validateMark(input, maxMark) {
 function recalcTotal() {
   let sum = 0;
   currentQuestions.forEach(q => {
-    const el = document.getElementById(`marks-${q.id}`);
-    if (el) sum += parseFloat(el.value) || 0;
+    if (q.sub_questions && q.sub_questions.length) {
+      q.sub_questions.forEach(sq => {
+        const el = document.getElementById(`sqmarks-${sq.id}`);
+        if (el) sum += parseFloat(el.value) || 0;
+      });
+    } else {
+      const el = document.getElementById(`marks-${q.id}`);
+      if (el) sum += parseFloat(el.value) || 0;
+    }
   });
   document.getElementById('gTotal').textContent = sum.toFixed(sum % 1 === 0 ? 0 : 1);
 }
@@ -394,15 +452,27 @@ async function submitGrade() {
   btn.disabled = true;
   btn.textContent = 'Saving…';
 
-  const question_grades = currentQuestions.map(q => ({
-    question_id: q.id,
-    marks: parseFloat(document.getElementById(`marks-${q.id}`)?.value) || 0
-  }));
+  const question_grades = [];
+  const sub_question_grades = [];
+  currentQuestions.forEach(q => {
+    if (q.sub_questions && q.sub_questions.length) {
+      let qTotal = 0;
+      q.sub_questions.forEach(sq => {
+        const marks = parseFloat(document.getElementById(`sqmarks-${sq.id}`)?.value) || 0;
+        sub_question_grades.push({ sub_question_id: sq.id, marks });
+        qTotal += marks;
+      });
+      question_grades.push({ question_id: q.id, marks: qTotal });
+    } else {
+      const marks = parseFloat(document.getElementById(`marks-${q.id}`)?.value) || 0;
+      question_grades.push({ question_id: q.id, marks });
+    }
+  });
 
   const feedback = document.getElementById('gFeedback')?.value || '';
 
   try {
-    const data = await apiPost(`/faculty/grading/${currentSubId}/grade/`, { question_grades, feedback });
+    const data = await apiPost(`/faculty/grading/${currentSubId}/grade/`, { question_grades, sub_question_grades, feedback });
     if (data.success) {
       closeModal('gradingModal');
       location.reload();

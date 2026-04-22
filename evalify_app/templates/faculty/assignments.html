@@ -129,7 +129,9 @@
         {% if a.assessment_type == 'quiz' %}❓
         {% elif a.assessment_type == 'mid' %}📖
         {% elif a.assessment_type == 'ct' %}✏️
-        {% else %}🎓{% endif %}
+        {% elif a.assessment_type == 'lab' %}🧪
+        {% elif a.assessment_type == 'final' %}🎓
+        {% else %}📄{% endif %}
       </div>
       <div style="flex:1;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -138,7 +140,9 @@
             {% if a.assessment_type == 'quiz' %}background:#fef9c3;color:#854d0e;
             {% elif a.assessment_type == 'mid' %}background:#fde68a;color:#92400e;
             {% elif a.assessment_type == 'ct' %}background:#d1fae5;color:#065f46;
-            {% else %}background:#fee2e2;color:#991b1b;{% endif %}">
+            {% elif a.assessment_type == 'lab' %}background:#ede9fe;color:#5b21b6;
+            {% elif a.assessment_type == 'final' %}background:#fee2e2;color:#991b1b;
+            {% else %}background:#e5e7eb;color:#374151;{% endif %}">
             {{ a.get_assessment_type_display }}
           </span>
           <span style="background:#fef3c7;color:#92400e;font-size:11px;font-weight:700;
@@ -202,7 +206,7 @@
               padding:24px;text-align:center;color:var(--gray);margin-bottom:14px;">
     <div style="font-size:28px;margin-bottom:6px;">📋</div>
     <div style="font-size:14px;font-weight:600;">No drafts</div>
-    <div style="font-size:12px;">Quiz, Mid, Class Test, and Final saved here before publishing.</div>
+    <div style="font-size:12px;">Assessments saved as Draft appear here before publishing.</div>
   </div>
 {% endif %}
 
@@ -224,7 +228,9 @@
       {% elif a.assessment_type == 'quiz' %}❓
       {% elif a.assessment_type == 'mid' %}📖
       {% elif a.assessment_type == 'ct' %}✏️
-      {% else %}🎓{% endif %}
+      {% elif a.assessment_type == 'lab' %}🧪
+      {% elif a.assessment_type == 'final' %}🎓
+      {% else %}📄{% endif %}
     </div>
     <div class="list-body">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -234,7 +240,9 @@
           {% elif a.assessment_type == 'quiz' %}background:#fef9c3;color:#854d0e;
           {% elif a.assessment_type == 'mid' %}background:#fde68a;color:#92400e;
           {% elif a.assessment_type == 'ct' %}background:#d1fae5;color:#065f46;
-          {% else %}background:#fee2e2;color:#991b1b;{% endif %}">
+          {% elif a.assessment_type == 'lab' %}background:#ede9fe;color:#5b21b6;
+          {% elif a.assessment_type == 'final' %}background:#fee2e2;color:#991b1b;
+          {% else %}background:#e5e7eb;color:#374151;{% endif %}">
           {{ a.get_assessment_type_display }}
         </span>
         <span style="background:#dcfce7;color:#166534;font-size:11px;font-weight:700;
@@ -258,7 +266,7 @@
   <div class="empty">
     <div class="empty-icon">✅</div>
     <div class="empty-title">No published assessments yet</div>
-    <div style="font-size:13px;">Create an Assignment (auto-publishes) or publish a Draft above.</div>
+    <div style="font-size:13px;">Create an assessment and choose "Publish Now", or publish a Draft above.</div>
   </div>
 {% endif %}
 
@@ -282,13 +290,43 @@
         <div style="font-size:13px;font-weight:700;color:var(--teal);margin-bottom:12px;">Basic Info</div>
         <div class="form-group">
           <label class="form-label">Type</label>
-          <select class="form-control" id="typeSelect" onchange="updateBanner()">
+          <select class="form-control" id="typeSelect" onchange="onTypeChange()">
             <option value="assignment">Assignment</option>
             <option value="quiz">Quiz</option>
             <option value="mid">Mid Exam</option>
             <option value="ct">Class Test</option>
             <option value="final">Final Exam</option>
+            <option value="lab">Lab Task</option>
           </select>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <input id="customTypeInput" class="form-control" style="flex:1;"
+                   placeholder="Add custom type (e.g. Viva, Presentation…)"
+                   maxlength="20"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomType();}">
+            <button type="button" class="btn btn-outline btn-sm"
+                    style="white-space:nowrap;flex-shrink:0;"
+                    onclick="addCustomType()">+ Add Type</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Visibility</label>
+          <div style="display:flex;border-radius:8px;overflow:hidden;border:1px solid var(--border);">
+            <button type="button" id="btnPublish"
+                    onclick="setVisibility('published')"
+                    style="flex:1;padding:8px 14px;border:none;font-size:13px;font-weight:600;
+                           cursor:pointer;transition:background .15s,color .15s;
+                           background:#dbeafe;color:#1d4ed8;">
+              🟢 Publish Now
+            </button>
+            <button type="button" id="btnDraft"
+                    onclick="setVisibility('draft')"
+                    style="flex:1;padding:8px 14px;border:none;font-size:13px;font-weight:600;
+                           cursor:pointer;transition:background .15s,color .15s;
+                           background:#f8fafc;color:var(--gray);border-left:1px solid var(--border);">
+              📋 Save as Draft
+            </button>
+          </div>
+          <div id="visNote" style="font-size:11px;color:var(--gray);margin-top:4px;"></div>
         </div>
         <div class="form-group">
           <label class="form-label">Title</label>
@@ -318,7 +356,7 @@
       </div>
 
       <!-- ── Grace Period / Late Submission Policy ── -->
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;
+      <div id="lateSection" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;
                   padding:16px;margin-bottom:16px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
           <span style="font-size:15px;">⏰</span>
@@ -380,9 +418,9 @@
 <script id="ploData" type="application/json">
 [{% for p in plos %}{"id":{{ p.id }},"code":"{{ p.code }}","desc":"{{ p.description|truncatechars:60|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}]
 </script>
-<!-- Selected course CLOs -->
+<!-- Selected course CLOs (each includes its connected PLO ids) -->
 <script id="courseClosData" type="application/json">
-[{% for clo in selected_course.clos.all %}{"id":{{ clo.id }},"code":"{{ clo.code }}","description":"{{ clo.description|truncatechars:50|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}]
+[{% for clo in selected_course.clos.all %}{"id":{{ clo.id }},"code":"{{ clo.code }}","description":"{{ clo.description|truncatechars:50|escapejs }}","plo_ids":[{% for p in clo.plos.all %}{{ p.id }}{% if not forloop.last %},{% endif %}{% endfor %}]}{% if not forloop.last %},{% endif %}{% endfor %}]
 </script>
 
 {% endif %}{# end if not selected_course #}
@@ -397,32 +435,151 @@ const ALL_PLOS   = JSON.parse(document.getElementById('ploData').textContent);
 const COURSE_CLOS = JSON.parse(document.getElementById('courseClosData').textContent);
 let qCount = 0;
 
+// ── Visibility state ──────────────────────────────────────────────────────
+let currentVisibility = 'published'; // default
+
+function setVisibility(vis) {
+  currentVisibility = vis;
+  const btnP = document.getElementById('btnPublish');
+  const btnD = document.getElementById('btnDraft');
+  const note = document.getElementById('visNote');
+  if (vis === 'published') {
+    btnP.style.background = '#dbeafe'; btnP.style.color = '#1d4ed8';
+    btnD.style.background = '#f8fafc'; btnD.style.color = 'var(--gray)';
+    note.textContent = 'Students will see this immediately after creation.';
+  } else {
+    btnD.style.background = '#fef3c7'; btnD.style.color = '#92400e';
+    btnP.style.background = '#f8fafc'; btnP.style.color = 'var(--gray)';
+    note.textContent = 'Saved privately. You can publish it later from the Drafts section.';
+  }
+  updateBanner();
+}
+
 // ── Banner ────────────────────────────────────────────────────────────────
+const NO_LATE_TYPES = new Set(['quiz', 'mid', 'final', 'ct']);
+
+function onTypeChange() {
+  const type = document.getElementById('typeSelect').value;
+  // Hide late submission section for exam/test types
+  document.getElementById('lateSection').style.display =
+    NO_LATE_TYPES.has(type) ? 'none' : '';
+  // Default visibility: assignment → publish, others → draft
+  setVisibility(type === 'assignment' ? 'published' : 'draft');
+}
+
+// ── Custom type ───────────────────────────────────────────────────────────
+function addCustomType() {
+  const input = document.getElementById('customTypeInput');
+  const label = input.value.trim();
+  if (!label) return;
+  const sel = document.getElementById('typeSelect');
+  // Use a normalised slug as the value
+  const val = label.toLowerCase().replace(/\s+/g, '_').slice(0, 20);
+  // Don't add duplicates
+  if ([...sel.options].some(o => o.value === val)) {
+    sel.value = val;
+    input.value = '';
+    onTypeChange();
+    return;
+  }
+  const opt = document.createElement('option');
+  opt.value = val;
+  opt.textContent = label;
+  sel.appendChild(opt);
+  sel.value = val;
+  input.value = '';
+  onTypeChange();
+}
+
 function updateBanner() {
   const type    = document.getElementById('typeSelect').value;
   const banner  = document.getElementById('typeBanner');
   const noteEl  = document.getElementById('dueDateNote');
   const labelEl = document.getElementById('dueDateLabel');
+  const icons   = {assignment:'📝', quiz:'❓', mid:'📖', ct:'✏️', final:'🎓', lab:'🧪'};
+  const labels  = {assignment:'Assignment', quiz:'Quiz', mid:'Mid Exam', ct:'Class Test', final:'Final Exam', lab:'Lab Task'};
+  const sel = document.getElementById('typeSelect');
+  const selectedLabel = sel.options[sel.selectedIndex]?.text || type;
+
+  const displayName = labels[type] || selectedLabel;
+  const displayIcon = icons[type] || '📄';
+  if (currentVisibility === 'published') {
+    banner.style.cssText = 'border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:flex;align-items:center;gap:8px;background:#dbeafe;border:1px solid #93c5fd;';
+    banner.innerHTML = `${displayIcon} <strong>${displayName}</strong> — will be <strong style="color:#1d4ed8;">published immediately</strong> and visible to enrolled students.`;
+  } else {
+    banner.style.cssText = 'border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:flex;align-items:center;gap:8px;background:#fffbeb;border:1px solid #fcd34d;';
+    banner.innerHTML = `${displayIcon} <strong>${displayName}</strong> — saved as <strong style="color:#92400e;">Draft</strong>. You can publish it when ready.`;
+  }
 
   if (type === 'assignment') {
-    banner.style.cssText = 'border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:flex;align-items:center;gap:8px;background:#dbeafe;border:1px solid #93c5fd;';
-    banner.innerHTML = '📝 <strong>Assignment</strong> — will be <strong style="color:#1d4ed8;">published immediately</strong> and visible to enrolled students.';
     labelEl.innerHTML = 'Due Date <span style="color:var(--red);">*</span>';
     noteEl.style.display = 'none';
   } else {
-    const labels = {quiz:'Quiz', mid:'Mid Exam', ct:'Class Test', final:'Final Exam'};
-    banner.style.cssText = 'border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:flex;align-items:center;gap:8px;background:#fffbeb;border:1px solid #fcd34d;';
-    banner.innerHTML = `📋 <strong>${labels[type]}</strong> — saved as <strong style="color:#92400e;">Draft</strong>. Map CLO/PLO, then Publish when ready.`;
     labelEl.textContent = 'Due Date';
     noteEl.style.display = 'block';
   }
 }
-updateBanner();
+onTypeChange();
+
+// ── PLO lookup map ────────────────────────────────────────────────────────
+const PLO_MAP = Object.fromEntries(ALL_PLOS.map(p => [p.id, p]));
+const SQ_LABELS = 'abcdefghijklmnopqrstuvwxyz'.split('');
+const sqCounters = {};   // {qN: count}
+
+// ── Image helpers ─────────────────────────────────────────────────────────
+function previewImage(input, imgId, rmId) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) {
+    alert('Image must be smaller than 8 MB.'); input.value = ''; return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = document.getElementById(imgId);
+    img.src = e.target.result;
+    img.style.display = 'block';
+    document.getElementById(rmId).style.display = '';
+  };
+  reader.readAsDataURL(file);
+}
+function clearImage(inputEl, imgId, rmId) {
+  inputEl.value = '';
+  const img = document.getElementById(imgId);
+  img.src = ''; img.style.display = 'none';
+  document.getElementById(rmId).style.display = 'none';
+}
+function imgUploadHtml(fileInputClass, previewId, rmId) {
+  return `
+    <div class="form-group" style="margin-bottom:10px;">
+      <label class="form-label" style="margin-bottom:4px;">
+        Image <span style="font-weight:400;color:var(--gray);font-size:11px;">(optional)</span>
+      </label>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <label style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;
+                      padding:6px 12px;border:1px dashed var(--border);border-radius:7px;
+                      font-size:12px;color:var(--gray);background:#f8fafc;"
+               onmouseover="this.style.borderColor='var(--teal)'"
+               onmouseout="this.style.borderColor='var(--border)'">
+          📷 Upload Image
+          <input type="file" accept="image/*" class="${fileInputClass}" style="display:none;"
+                 onchange="previewImage(this,'${previewId}','${rmId}')">
+        </label>
+        <button type="button" id="${rmId}" style="display:none;font-size:11px;padding:4px 9px;"
+                class="btn btn-outline btn-sm"
+                onclick="clearImage(this.closest('.form-group').querySelector('input[type=file]'),'${previewId}','${rmId}')">
+          ✕ Remove
+        </button>
+      </div>
+      <img id="${previewId}" style="display:none;max-width:100%;max-height:160px;
+           margin-top:8px;border-radius:8px;border:1px solid var(--border);">
+    </div>`;
+}
 
 // ── Question card ─────────────────────────────────────────────────────────
 function addQuestion() {
   qCount++;
   const n = qCount;
+  sqCounters[n] = 0;
   const card = document.createElement('div');
   card.className = 'q-card';
   card.id = `qcard-${n}`;
@@ -434,45 +591,122 @@ function addQuestion() {
     </div>
     <div class="form-group">
       <label class="form-label">Question Text</label>
-      <textarea class="form-control q-text" rows="2" placeholder="Enter question text..."></textarea>
+      <textarea class="form-control q-text" rows="2" placeholder="Enter question text…"></textarea>
     </div>
-    <div style="display:grid;grid-template-columns:110px 1fr 1fr;gap:12px;align-items:start;">
-      <div class="form-group" style="margin-bottom:0;">
-        <label class="form-label">Marks</label>
-        <input type="number" class="form-control q-marks" value="10" min="1" oninput="calcTotal()">
+    ${imgUploadHtml('q-image-input','qimg-${n}','qimg-rm-${n}')}
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:12px;font-weight:700;color:var(--teal);">Sub-questions</span>
+        <button type="button" class="btn btn-outline btn-sm"
+                onclick="addSubQuestion(${n})">+ Add Sub-question</button>
       </div>
-      <div class="form-group" style="margin-bottom:0;">
-        <label class="form-label">CLO(s)</label>
-        <div class="q-clo-list" style="max-height:110px;overflow-y:auto;border:1px solid var(--border);
-             border-radius:7px;padding:6px;background:#fff;">${buildCloHtml()}</div>
+      <div id="sqcon-${n}"></div>
+      <div id="sqempty-${n}" style="font-size:12px;color:var(--light);padding:6px 0;">
+        No sub-questions yet — add parts (a, b, c…) using the button above.
       </div>
-      <div class="form-group" style="margin-bottom:0;">
-        <label class="form-label">PLO(s)</label>
-        <div class="q-plo-list" style="max-height:110px;overflow-y:auto;border:1px solid var(--border);
-             border-radius:7px;padding:6px;background:#fff;">${buildPloHtml()}</div>
+      <div style="text-align:right;font-size:12px;color:var(--gray);margin-top:6px;">
+        Question total: <strong id="qtotal-${n}" style="color:var(--teal);">0</strong> marks
       </div>
     </div>`;
   document.getElementById('questionsContainer').appendChild(card);
   document.getElementById('noQMsg').style.display = 'none';
-  calcTotal();
 }
 
-function buildCloHtml() {
-  if (!COURSE_CLOS.length) return '<span style="font-size:11px;color:var(--light);">No CLOs in this course</span>';
+// ── Sub-question card ─────────────────────────────────────────────────────
+function addSubQuestion(n) {
+  sqCounters[n] = (sqCounters[n] || 0) + 1;
+  const m = sqCounters[n];
+  const lbl = SQ_LABELS[m - 1] || m;
+  document.getElementById(`sqempty-${n}`).style.display = 'none';
+  const card = document.createElement('div');
+  card.id = `sqcard-${n}-${m}`;
+  card.style.cssText = 'background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:12px 14px;margin-bottom:10px;';
+  card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:12px;font-weight:700;color:#166534;">Part (${lbl})</span>
+      <button type="button" class="btn btn-outline btn-sm"
+              style="color:var(--red);padding:2px 8px;font-size:11px;"
+              onclick="removeSubQuestion(${n},${m})">✕</button>
+    </div>
+    <div class="form-group">
+      <textarea class="form-control sq-text" rows="2"
+                placeholder="Sub-question text…"></textarea>
+    </div>
+    ${imgUploadHtml('sq-image-input','sqimg-${n}-${m}','sqimg-rm-${n}-${m}')}
+    <div style="display:grid;grid-template-columns:90px 1fr 1fr;gap:10px;align-items:start;">
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">Marks</label>
+        <input type="number" class="form-control sq-marks" value="5" min="1"
+               oninput="calcSubTotal(${n})">
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">CLO(s)</label>
+        <div class="sq-clo-list" style="max-height:100px;overflow-y:auto;border:1px solid var(--border);
+             border-radius:7px;padding:6px;background:#fff;">${buildSubCloHtml(n,m)}</div>
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">PLO(s)
+          <span style="font-weight:400;color:var(--gray);font-size:10px;">— pick CLO first</span>
+        </label>
+        <div class="sq-plo-list" style="max-height:100px;overflow-y:auto;border:1px solid var(--border);
+             border-radius:7px;padding:6px;background:#f8fafc;">
+          <span style="font-size:11px;color:var(--light);">Select a CLO to see its PLOs</span>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById(`sqcon-${n}`).appendChild(card);
+  calcSubTotal(n);
+}
+
+function buildSubCloHtml(n, m) {
+  if (!COURSE_CLOS.length)
+    return '<span style="font-size:11px;color:var(--light);">No CLOs in course</span>';
   return COURSE_CLOS.map(c => `
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:2px 0;cursor:pointer;">
-      <input type="checkbox" value="${c.id}" style="accent-color:var(--teal);">
+      <input type="checkbox" value="${c.id}"
+             data-plo-ids="${(c.plo_ids||[]).join(',')}"
+             style="accent-color:var(--teal);"
+             onchange="updateSubPlos(${n},${m})">
       <b>${c.code}</b>: ${c.description}
     </label>`).join('');
 }
 
-function buildPloHtml() {
-  if (!ALL_PLOS.length) return '<span style="font-size:11px;color:var(--light);">No PLOs defined</span>';
-  return ALL_PLOS.map(p => `
-    <label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:2px 0;cursor:pointer;">
-      <input type="checkbox" value="${p.id}" style="accent-color:var(--teal);">
+function updateSubPlos(n, m) {
+  const card = document.getElementById(`sqcard-${n}-${m}`);
+  if (!card) return;
+  const ploList = card.querySelector('.sq-plo-list');
+  const kept = new Set([...ploList.querySelectorAll('input:checked')].map(i => parseInt(i.value)));
+  const allowed = [...new Set(
+    [...card.querySelectorAll('.sq-clo-list input:checked')]
+      .flatMap(cb => (cb.dataset.ploIds||'').split(',').filter(Boolean).map(Number))
+  )];
+  if (!allowed.length) {
+    ploList.innerHTML = '<span style="font-size:11px;color:var(--light);">Select a CLO to see its PLOs</span>';
+    return;
+  }
+  ploList.innerHTML = allowed.map(id => {
+    const p = PLO_MAP[id];
+    if (!p) return '';
+    return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:2px 0;cursor:pointer;">
+      <input type="checkbox" value="${p.id}" ${kept.has(id)?'checked':''} style="accent-color:var(--teal);">
       <b>${p.code}</b>: ${p.desc}
-    </label>`).join('');
+    </label>`;
+  }).join('');
+}
+
+function removeSubQuestion(n, m) {
+  document.getElementById(`sqcard-${n}-${m}`)?.remove();
+  if (!document.getElementById(`sqcon-${n}`).querySelectorAll('[id^="sqcard-"]').length)
+    document.getElementById(`sqempty-${n}`).style.display = '';
+  calcSubTotal(n);
+}
+
+function calcSubTotal(n) {
+  let t = 0;
+  document.getElementById(`sqcon-${n}`)?.querySelectorAll('.sq-marks')
+    .forEach(i => t += parseInt(i.value) || 0);
+  document.getElementById(`qtotal-${n}`).textContent = t;
+  calcTotal();
 }
 
 function removeQuestion(n) {
@@ -486,7 +720,11 @@ function removeQuestion(n) {
 
 function calcTotal() {
   let t = 0;
-  document.querySelectorAll('.q-marks').forEach(i => t += parseInt(i.value) || 0);
+  document.querySelectorAll('.q-card').forEach(card => {
+    const n = card.id.replace('qcard-', '');
+    document.getElementById(`sqcon-${n}`)?.querySelectorAll('.sq-marks')
+      .forEach(i => t += parseInt(i.value) || 0);
+  });
   document.getElementById('aMarks').value = t || '';
 }
 
@@ -503,16 +741,41 @@ async function submitCreate() {
   if (type === 'assignment' && !due) {
     errEl.textContent='Due date is required for assignments.'; errEl.style.display='block'; return;
   }
-
   const questions = [];
   let valid = true;
   document.querySelectorAll('.q-card').forEach(card => {
-    const text  = card.querySelector('.q-text').value.trim();
-    const marks = parseInt(card.querySelector('.q-marks').value) || 0;
-    if (!text) { errEl.textContent='All question texts are required.'; errEl.style.display='block'; valid=false; return; }
-    const clo_ids = [...card.querySelectorAll('.q-clo-list input:checked')].map(i=>parseInt(i.value));
-    const plo_ids = [...card.querySelectorAll('.q-plo-list input:checked')].map(i=>parseInt(i.value));
-    questions.push({ text, max_marks: marks, clo_ids, plo_ids });
+    if (!valid) return;
+    const text = card.querySelector('.q-text').value.trim();
+    if (!text) {
+      errEl.textContent = 'All question texts are required.';
+      errEl.style.display = 'block'; valid = false; return;
+    }
+    const n = card.id.replace('qcard-', '');
+    // Question image — read from preview img src (already base64 via FileReader)
+    const qImgEl = document.getElementById(`qimg-${n}`);
+    const image_b64 = (qImgEl && qImgEl.src && qImgEl.style.display !== 'none') ? qImgEl.src : null;
+
+    // Sub-questions
+    const sub_questions = [];
+    card.querySelectorAll(`#sqcon-${n} [id^="sqcard-"]`).forEach(sqCard => {
+      if (!valid) return;
+      const sqText = sqCard.querySelector('.sq-text').value.trim();
+      if (!sqText) {
+        errEl.textContent = 'All sub-question texts are required.';
+        errEl.style.display = 'block'; valid = false; return;
+      }
+      const sqMarks = parseInt(sqCard.querySelector('.sq-marks').value) || 0;
+      const sqMN    = sqCard.id.replace(`sqcard-${n}-`, '');
+      const sqImgEl = document.getElementById(`sqimg-${n}-${sqMN}`);
+      const sq_image_b64 = (sqImgEl && sqImgEl.src && sqImgEl.style.display !== 'none') ? sqImgEl.src : null;
+      const clo_ids = [...sqCard.querySelectorAll('.sq-clo-list input:checked')].map(i => parseInt(i.value));
+      const plo_ids = [...sqCard.querySelectorAll('.sq-plo-list input:checked')].map(i => parseInt(i.value));
+      sub_questions.push({ text: sqText, max_marks: sqMarks, image_b64: sq_image_b64, clo_ids, plo_ids });
+    });
+    if (!valid) return;
+
+    const qTotal = parseInt(document.getElementById(`qtotal-${n}`)?.textContent) || 0;
+    questions.push({ text, image_b64, max_marks: qTotal, sub_questions });
   });
   if (!valid) return;
 
@@ -520,6 +783,7 @@ async function submitCreate() {
     course_id: {{ selected_course.id }},
     assessment_type: type, title, description: desc,
     due_date:             due,
+    publish_immediately:  currentVisibility === 'published',
     grace_period_hours:   parseInt(document.getElementById('aGraceHours').value)   || 0,
     late_deduction_type:  document.getElementById('aDeductType').value,
     late_deduction_value: parseFloat(document.getElementById('aDeductValue').value) || 0,

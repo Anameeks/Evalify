@@ -3,9 +3,13 @@ from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.http import JsonResponse
 from django.db.models import Count
+from django.core.files.base import ContentFile
 from collections import defaultdict
 import json
-from .models import (User, Course, CLO, PLO, Assessment, Question,Enrollment, Submission, QuestionGrade, Announcement, StudyMaterial, Notification )
+import base64
+import uuid
+from .models import (User, Course, CLO, PLO, Assessment, Question, SubQuestion, SubQuestionGrade,
+                     Enrollment, Submission, QuestionGrade, Announcement, StudyMaterial, Notification)
 from .notifications import (notify_grade_released, notify_new_assignment, notify_new_material, notify_announcement)
 from .grace_period import check_submission_window, apply_late_deduction, recalculate_final_score
 
@@ -288,16 +292,33 @@ def faculty_grading(request):
 def get_submission_detail(request, sub_id):
     sub = get_object_or_404(Submission, id=sub_id, assessment__course__faculty=request.user)
     questions = []
-    for q in sub.assessment.questions.all():
+    for q in sub.assessment.questions.all().order_by('order'):
         try:
             obtained = QuestionGrade.objects.get(submission=sub, question=q).marks_obtained
         except QuestionGrade.DoesNotExist:
             obtained = 0
+
+        sub_qs = []
+        for sq in q.sub_questions.order_by('order'):
+            try:
+                sq_obtained = SubQuestionGrade.objects.get(submission=sub, sub_question=sq).marks_obtained
+            except SubQuestionGrade.DoesNotExist:
+                sq_obtained = 0
+            sub_qs.append({
+                'id': sq.id, 'order': sq.order, 'text': sq.text,
+                'image_url': sq.image.url if sq.image else None,
+                'max_marks': sq.max_marks, 'obtained': sq_obtained,
+                'clos': [{'code': c.code} for c in sq.clos.all()],
+                'plos': [{'code': p.code} for p in sq.plos.all()],
+            })
+
         questions.append({
             'id': q.id, 'order': q.order, 'text': q.text,
+            'image_url': q.image.url if q.image else None,
             'max_marks': q.max_marks, 'obtained': obtained,
             'clos': [{'code': c.code} for c in q.clos.all()],
             'plos': [{'code': p.code} for p in q.plos.all()],
+            'sub_questions': sub_qs,
         })
     file_url = sub.submitted_file.url if sub.submitted_file else None
     file_name = sub.submitted_file.name.split('/')[-1] if sub.submitted_file else None
@@ -325,8 +346,30 @@ def grade_submission(request, sub_id):
     if request.method == 'POST':
         data = json.loads(request.body)
         total = 0
+
+        # Sub-question grades
+        sq_totals = defaultdict(float)  # question_id → accumulated sub marks
+        for sqg in data.get('sub_question_grades', []):
+            sq = get_object_or_404(SubQuestion, id=sqg['sub_question_id'])
+            marks = min(float(sqg['marks']), sq.max_marks)
+            SubQuestionGrade.objects.update_or_create(
+                submission=sub, sub_question=sq, defaults={'marks_obtained': marks}
+            )
+            sq_totals[sq.question_id] += marks
+
+        # Roll sub-question totals up to question level
+        for q_id, q_marks in sq_totals.items():
+            q = get_object_or_404(Question, id=q_id)
+            QuestionGrade.objects.update_or_create(
+                submission=sub, question=q, defaults={'marks_obtained': q_marks}
+            )
+            total += q_marks
+
+        # Plain question grades (questions without sub-questions)
         for qg_data in data.get('question_grades', []):
             q = get_object_or_404(Question, id=qg_data['question_id'])
+            if q.id in sq_totals:
+                continue  # already handled above
             marks = min(float(qg_data['marks']), q.max_marks)
             QuestionGrade.objects.update_or_create(
                 submission=sub, question=q, defaults={'marks_obtained': marks}
@@ -851,14 +894,28 @@ def faculty_assignments(request):
     })
 
 
+def _decode_image(b64_str, prefix='img'):
+    """Decode a base64 data-URL string into a ContentFile. Returns None on failure."""
+    if not b64_str or ',' not in b64_str:
+        return None
+    try:
+        header, data = b64_str.split(',', 1)
+        ext = header.split('/')[1].split(';')[0]
+        return ContentFile(base64.b64decode(data), name=f'{prefix}_{uuid.uuid4().hex[:8]}.{ext}')
+    except Exception:
+        return None
+
+
 @faculty_required
 def create_assignment(request):
     if request.method == 'POST':
         data = json.loads(request.body)
         course = get_object_or_404(Course, id=data['course_id'], faculty=request.user)
         assessment_type = data.get('assessment_type', 'assignment')
-        # Assignments publish immediately; all other types save as draft
-        status = 'published' if assessment_type == 'assignment' else 'draft'
+        # Faculty can explicitly choose publish or draft; assignment defaults to publish
+        default_publish = assessment_type == 'assignment'
+        publish_immediately = data.get('publish_immediately', default_publish)
+        status = 'published' if publish_immediately else 'draft'
         # due_date is optional for non-assignment types
         due_date = data.get('due_date') or None
         assignment = Assessment.objects.create(
@@ -880,16 +937,53 @@ def create_assignment(request):
                 assessment=assignment,
                 order=i,
                 text=q['text'],
-                max_marks=int(q.get('max_marks', 10)),
+                max_marks=0,
             )
-            if q.get('clo_ids'):
-                question.clos.set(CLO.objects.filter(id__in=q['clo_ids']))
-            if q.get('plo_ids'):
-                question.plos.set(PLO.objects.filter(id__in=q['plo_ids']))
-            total += int(q.get('max_marks', 10))
+            # Question-level image
+            img_file = _decode_image(q.get('image_b64'), f'q{i}')
+            if img_file:
+                question.image.save(img_file.name, img_file, save=False)
+
+            sub_questions = q.get('sub_questions', [])
+            if sub_questions:
+                all_clo_ids, all_plo_ids, q_total = set(), set(), 0
+                for j, sq in enumerate(sub_questions, 1):
+                    sub = SubQuestion.objects.create(
+                        question=question,
+                        order=j,
+                        text=sq['text'],
+                        max_marks=int(sq.get('max_marks', 5)),
+                    )
+                    sq_img = _decode_image(sq.get('image_b64'), f'sq{i}_{j}')
+                    if sq_img:
+                        sub.image.save(sq_img.name, sq_img, save=False)
+                    if sq.get('clo_ids'):
+                        sub.clos.set(CLO.objects.filter(id__in=sq['clo_ids']))
+                        all_clo_ids.update(sq['clo_ids'])
+                    if sq.get('plo_ids'):
+                        sub.plos.set(PLO.objects.filter(id__in=sq['plo_ids']))
+                        all_plo_ids.update(sq['plo_ids'])
+                    sub.save()
+                    q_total += int(sq.get('max_marks', 5))
+                question.max_marks = q_total
+                if all_clo_ids:
+                    question.clos.set(CLO.objects.filter(id__in=all_clo_ids))
+                if all_plo_ids:
+                    question.plos.set(PLO.objects.filter(id__in=all_plo_ids))
+                total += q_total
+            else:
+                # Fallback: question-level marks/CLO/PLO (backward compat)
+                question.max_marks = int(q.get('max_marks', 10))
+                if q.get('clo_ids'):
+                    question.clos.set(CLO.objects.filter(id__in=q['clo_ids']))
+                if q.get('plo_ids'):
+                    question.plos.set(PLO.objects.filter(id__in=q['plo_ids']))
+                total += question.max_marks
+            question.save()
         # Use manual total_marks if provided and no questions, else sum of questions
         manual_total = int(data.get('total_marks', 0))
         assignment.total_marks = total if total > 0 else manual_total
+        assignment.save()
 
         if status == 'published':
             notify_new_assignment(assignment)
@@ -1176,9 +1270,60 @@ def faculty_question_bank(request):
     papers  = PastPaper.objects.filter(
         uploaded_by=request.user
     ).prefetch_related('questions', 'allowed_courses')
+
+    # Build assessment question bank: course → type groups → assessments → questions
+    TYPE_ORDER  = ['assignment', 'quiz', 'mid', 'ct', 'final', 'lab']
+    TYPE_LABELS = dict(Assessment.TYPE_CHOICES)
+
+    def type_sort_key(t):
+        try:
+            return TYPE_ORDER.index(t)
+        except ValueError:
+            return len(TYPE_ORDER)
+
+    course_bank = []
+    for course in courses:
+        assessments = Assessment.objects.filter(course=course).prefetch_related(
+            'questions__clos', 'questions__plos',
+            'questions__sub_questions__clos',
+            'questions__sub_questions__plos',
+        ).order_by('assessment_type', 'created_at')
+
+        type_map = defaultdict(list)
+        for a in assessments:
+            qs = list(a.questions.all())
+            if qs:
+                type_map[a.assessment_type].append({'assessment': a, 'questions': qs})
+
+        if not type_map:
+            continue
+
+        # Add num_label so template can show "Quiz 1", "Quiz 2" etc.
+        for t, entries in type_map.items():
+            lbl = TYPE_LABELS.get(t, t.replace('_', ' ').title())
+            total = len(entries)
+            for i, entry in enumerate(entries, 1):
+                entry['num_label'] = f"{lbl} {i}" if total > 1 else lbl
+
+        type_groups = [
+            {
+                'type_key':   t,
+                'type_label': TYPE_LABELS.get(t, t.replace('_', ' ').title()),
+                'entries':    type_map[t],
+                'q_count':    sum(len(e['questions']) for e in type_map[t]),
+            }
+            for t in sorted(type_map.keys(), key=type_sort_key)
+        ]
+        course_bank.append({
+            'course':      course,
+            'type_groups': type_groups,
+            'total_q':     sum(g['q_count'] for g in type_groups),
+        })
+
     return render(request, 'faculty/question_bank.html', {
-        'papers':  papers,
-        'courses': courses,
+        'papers':      papers,
+        'courses':     courses,
+        'course_bank': course_bank,
     })
 
 
@@ -1255,15 +1400,36 @@ def toggle_hint_visibility(request, question_id):
 def student_question_bank(request):
     from .models import PastPaper
     from django.db.models import Q
-    enrolled_ids = Enrollment.objects.filter(
-        student=request.user
-    ).values_list('course_id', flat=True)
 
+    enrollments = Enrollment.objects.filter(student=request.user).select_related('course')
+    enrolled_ids = [e.course_id for e in enrollments]
+
+    # Build course bank for the Assessment Questions tab
+    course_bank = []
+    for e in enrollments:
+        course = e.course
+        assessments = Assessment.objects.filter(
+            course=course, status='published'
+        ).prefetch_related('questions').order_by('assessment_type', 'created_at')
+        type_set = set()
+        q_total = 0
+        for a in assessments:
+            qs = a.questions.count()
+            if qs > 0:
+                type_set.add(a.assessment_type)
+                q_total += qs
+        if q_total > 0:
+            course_bank.append({
+                'course':      course,
+                'type_count':  len(type_set),
+                'q_total':     q_total,
+            })
+
+    # Past papers (existing logic unchanged)
     papers = PastPaper.objects.filter(
         Q(is_public=True) | Q(allowed_courses__id__in=enrolled_ids)
     ).distinct().prefetch_related('questions')
 
-    # Filters
     search      = request.GET.get('q', '').strip()
     exam_type   = request.GET.get('type', '')
     semester    = request.GET.get('semester', '')
@@ -1292,6 +1458,7 @@ def student_question_bank(request):
     ).distinct()
 
     return render(request, 'student/question_bank.html', {
+        'course_bank':  course_bank,
         'papers':       papers,
         'total_count':  papers.count(),
         'course_codes': sorted(set(all_accessible.values_list('course_code', flat=True))),
@@ -1301,6 +1468,7 @@ def student_question_bank(request):
         'semester':     semester,
         'course_code':  course_code,
         'difficulty':   difficulty,
+        'active_tab':   request.GET.get('tab', 'assessments'),
     })
 
 
@@ -1323,4 +1491,91 @@ def student_view_paper(request, paper_id):
     return render(request, 'student/view_paper.html', {
         'paper':     paper,
         'questions': paper.questions.all(),
+    })
+
+
+@student_required
+def student_qbank_course(request, course_id):
+    enrolled_ids = list(Enrollment.objects.filter(
+        student=request.user
+    ).values_list('course_id', flat=True))
+
+    if course_id not in enrolled_ids:
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden()
+
+    course = get_object_or_404(Course, id=course_id)
+
+    TYPE_ORDER  = ['assignment', 'quiz', 'mid', 'ct', 'final', 'lab']
+    TYPE_LABELS = dict(Assessment.TYPE_CHOICES)
+
+    def type_sort_key(t):
+        try:
+            return TYPE_ORDER.index(t)
+        except ValueError:
+            return len(TYPE_ORDER)
+
+    type_map = {}
+    for a in Assessment.objects.filter(course=course, status='published').prefetch_related('questions'):
+        qs = a.questions.count()
+        if qs > 0:
+            if a.assessment_type not in type_map:
+                type_map[a.assessment_type] = {'a_count': 0, 'q_count': 0}
+            type_map[a.assessment_type]['a_count'] += 1
+            type_map[a.assessment_type]['q_count'] += qs
+
+    type_groups = [
+        {
+            'type_key':   t,
+            'type_label': TYPE_LABELS.get(t, t.replace('_', ' ').title()),
+            'a_count':    type_map[t]['a_count'],
+            'q_count':    type_map[t]['q_count'],
+        }
+        for t in sorted(type_map.keys(), key=type_sort_key)
+    ]
+
+    return render(request, 'student/qbank_course.html', {
+        'course':      course,
+        'type_groups': type_groups,
+    })
+
+
+@student_required
+def student_qbank_type(request, course_id, atype):
+    enrolled_ids = list(Enrollment.objects.filter(
+        student=request.user
+    ).values_list('course_id', flat=True))
+
+    if course_id not in enrolled_ids:
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden()
+
+    course = get_object_or_404(Course, id=course_id)
+    TYPE_LABELS = dict(Assessment.TYPE_CHOICES)
+    type_label  = TYPE_LABELS.get(atype, atype.replace('_', ' ').title())
+
+    assessments = Assessment.objects.filter(
+        course=course, assessment_type=atype, status='published'
+    ).prefetch_related(
+        'questions__clos',
+        'questions__plos',
+        'questions__sub_questions__clos',
+        'questions__sub_questions__plos',
+    ).order_by('created_at')
+
+    all_with_q = [a for a in assessments if a.questions.exists()]
+    total = len(all_with_q)
+    entries = []
+    for idx, a in enumerate(all_with_q, 1):
+        entries.append({
+            'assessment': a,
+            'label':      f"{type_label} {idx}" if total > 1 else type_label,
+            'questions':  list(a.questions.all().order_by('order')),
+        })
+
+    return render(request, 'student/qbank_type.html', {
+        'course':     course,
+        'atype':      atype,
+        'type_label': type_label,
+        'entries':    entries,
     })
