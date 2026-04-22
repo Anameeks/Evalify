@@ -1161,3 +1161,166 @@ def get_unread_count(request):
 def mark_all_read(request):
     Notification.objects.filter(recipient=request.user, is_read=False).update(is_read=True)
     return JsonResponse({'success': True})
+
+
+
+
+# QUESTION BANK VIEWS
+
+
+
+@faculty_required
+def faculty_question_bank(request):
+    from .models import PastPaper
+    courses = Course.objects.filter(faculty=request.user)
+    papers  = PastPaper.objects.filter(
+        uploaded_by=request.user
+    ).prefetch_related('questions', 'allowed_courses')
+    return render(request, 'faculty/question_bank.html', {
+        'papers':  papers,
+        'courses': courses,
+    })
+
+
+@faculty_required
+def create_past_paper(request):
+    from .models import PastPaper, PastPaperQuestion
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        paper = PastPaper.objects.create(
+            title         = data['title'],
+            course_code   = data['course_code'],
+            course_name   = data['course_name'],
+            semester      = data['semester'],
+            exam_type     = data['exam_type'],
+            total_marks   = int(data.get('total_marks', 0)),
+            duration_mins = int(data.get('duration_mins', 0)),
+            description   = data.get('description', ''),
+            is_public     = data.get('is_public', False),
+            uploaded_by   = request.user,
+        )
+        course_ids = data.get('allowed_course_ids', [])
+        if course_ids:
+            paper.allowed_courses.set(
+                Course.objects.filter(id__in=course_ids, faculty=request.user)
+            )
+        total = 0
+        for i, q in enumerate(data.get('questions', []), 1):
+            PastPaperQuestion.objects.create(
+                paper       = paper,
+                order       = i,
+                text        = q['text'],
+                marks       = int(q.get('marks', 0)),
+                answer_hint = q.get('answer_hint', ''),
+                show_hint   = q.get('show_hint', False),
+                topic_tag   = q.get('topic_tag', ''),
+                difficulty  = q.get('difficulty', ''),
+            )
+            total += int(q.get('marks', 0))
+        if total > 0:
+            paper.total_marks = total
+            paper.save(update_fields=['total_marks'])
+        return JsonResponse({'success': True, 'id': paper.id})
+    return JsonResponse({'error': 'POST required'}, status=400)
+
+
+@faculty_required
+def delete_past_paper(request, paper_id):
+    from .models import PastPaper
+    paper = get_object_or_404(PastPaper, id=paper_id, uploaded_by=request.user)
+    paper.delete()
+    return JsonResponse({'success': True})
+
+
+@faculty_required
+def toggle_paper_visibility(request, paper_id):
+    from .models import PastPaper
+    paper = get_object_or_404(PastPaper, id=paper_id, uploaded_by=request.user)
+    paper.is_public = not paper.is_public
+    paper.save(update_fields=['is_public'])
+    return JsonResponse({'success': True, 'is_public': paper.is_public})
+
+
+@faculty_required
+def toggle_hint_visibility(request, question_id):
+    from .models import PastPaperQuestion
+    q = get_object_or_404(PastPaperQuestion, id=question_id,
+                          paper__uploaded_by=request.user)
+    q.show_hint = not q.show_hint
+    q.save(update_fields=['show_hint'])
+    return JsonResponse({'success': True, 'show_hint': q.show_hint})
+
+
+@student_required
+def student_question_bank(request):
+    from .models import PastPaper
+    from django.db.models import Q
+    enrolled_ids = Enrollment.objects.filter(
+        student=request.user
+    ).values_list('course_id', flat=True)
+
+    papers = PastPaper.objects.filter(
+        Q(is_public=True) | Q(allowed_courses__id__in=enrolled_ids)
+    ).distinct().prefetch_related('questions')
+
+    # Filters
+    search      = request.GET.get('q', '').strip()
+    exam_type   = request.GET.get('type', '')
+    semester    = request.GET.get('semester', '')
+    course_code = request.GET.get('course', '')
+    difficulty  = request.GET.get('difficulty', '')
+
+    if search:
+        papers = papers.filter(
+            Q(title__icontains=search) |
+            Q(course_code__icontains=search) |
+            Q(course_name__icontains=search) |
+            Q(questions__text__icontains=search) |
+            Q(questions__topic_tag__icontains=search)
+        ).distinct()
+    if exam_type:
+        papers = papers.filter(exam_type=exam_type)
+    if semester:
+        papers = papers.filter(semester__icontains=semester)
+    if course_code:
+        papers = papers.filter(course_code__icontains=course_code)
+    if difficulty:
+        papers = papers.filter(questions__difficulty=difficulty).distinct()
+
+    all_accessible = PastPaper.objects.filter(
+        Q(is_public=True) | Q(allowed_courses__id__in=enrolled_ids)
+    ).distinct()
+
+    return render(request, 'student/question_bank.html', {
+        'papers':       papers,
+        'total_count':  papers.count(),
+        'course_codes': sorted(set(all_accessible.values_list('course_code', flat=True))),
+        'semesters':    sorted(set(all_accessible.values_list('semester', flat=True)), reverse=True),
+        'search':       search,
+        'exam_type':    exam_type,
+        'semester':     semester,
+        'course_code':  course_code,
+        'difficulty':   difficulty,
+    })
+
+
+@student_required
+def student_view_paper(request, paper_id):
+    from .models import PastPaper
+    from django.db.models import Q
+    enrolled_ids = Enrollment.objects.filter(
+        student=request.user
+    ).values_list('course_id', flat=True)
+
+    paper = get_object_or_404(PastPaper, id=paper_id)
+
+    # Permission check
+    if not paper.is_public:
+        if not paper.allowed_courses.filter(id__in=enrolled_ids).exists():
+            from django.http import HttpResponseForbidden
+            return HttpResponseForbidden("You don't have access to this paper.")
+
+    return render(request, 'student/view_paper.html', {
+        'paper':     paper,
+        'questions': paper.questions.all(),
+    })

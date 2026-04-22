@@ -250,3 +250,68 @@ class Notification(models.Model):
                 assessment=assessment,
                 submission=submission,
             )
+
+
+
+
+
+class PastPaper(models.Model):
+    EXAM_TYPE_CHOICES = [
+        ('mid',        'Mid Exam'),
+        ('final',      'Final Exam'),
+        ('ct',         'Class Test'),
+        ('quiz',       'Quiz'),
+        ('assignment', 'Assignment'),
+    ]
+ 
+    title           = models.CharField(max_length=200)
+    course_code     = models.CharField(max_length=20)
+    course_name     = models.CharField(max_length=200)
+    semester        = models.CharField(max_length=50)
+    exam_type       = models.CharField(max_length=20, choices=EXAM_TYPE_CHOICES)
+    total_marks     = models.IntegerField(default=0)
+    duration_mins   = models.IntegerField(default=0)
+    description     = models.TextField(blank=True)
+ 
+    # Privacy
+    is_public       = models.BooleanField(default=False,
+        help_text='True = all enrolled students can access')
+    allowed_courses = models.ManyToManyField('Course', blank=True,
+        related_name='past_papers',
+        help_text='If not public, only students in these courses can access')
+ 
+    uploaded_by     = models.ForeignKey(User, on_delete=models.CASCADE,
+        related_name='past_papers')
+    uploaded_at     = models.DateTimeField(auto_now_add=True)
+ 
+    class Meta:
+        ordering = ['-uploaded_at']
+ 
+    def __str__(self):
+        return f"{self.course_code} | {self.semester} | {self.get_exam_type_display()}"
+ 
+ 
+class PastPaperQuestion(models.Model):
+    DIFFICULTY_CHOICES = [
+        ('easy',   'Easy'),
+        ('medium', 'Medium'),
+        ('hard',   'Hard'),
+    ]
+ 
+    paper       = models.ForeignKey(PastPaper, on_delete=models.CASCADE,
+                    related_name='questions')
+    order       = models.IntegerField(default=1)
+    text        = models.TextField()
+    marks       = models.IntegerField(default=0)
+    answer_hint = models.TextField(blank=True)
+    show_hint   = models.BooleanField(default=False)
+    topic_tag   = models.CharField(max_length=100, blank=True)
+    difficulty  = models.CharField(max_length=10, blank=True,
+                    choices=DIFFICULTY_CHOICES)
+ 
+    class Meta:
+        ordering = ['order']
+ 
+    def __str__(self):
+        return f"Q{self.order} — {self.paper}"
+ 
