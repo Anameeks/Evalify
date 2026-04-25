@@ -38,6 +38,65 @@
   </div>
 </div>
 
+<!-- eSCAR-style CLO & PLO Attainment Charts -->
+{% if clo_attainment_list or plo_attainment_list %}
+<div class="two-col" style="margin-bottom:20px;">
+
+  <!-- CLO Attainment -->
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">📋 CLO Attainment</div>
+        <div style="font-size:11px;color:var(--gray);margin-top:2px;">
+          {{ selected_course.code }}, {{ selected_course.semester }}
+        </div>
+      </div>
+      <span style="font-size:11px;color:var(--gray);background:#fff9c4;border:1px solid #f0e068;border-radius:5px;padding:2px 8px;">
+        Threshold: 60%
+      </span>
+    </div>
+    {% if clo_attainment_list %}
+    <div style="position:relative;height:220px;padding-top:8px;">
+      <canvas id="escarCloChart"></canvas>
+    </div>
+    <div id="escarCloLegend" style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;padding:10px 0 2px;"></div>
+    {% else %}
+    <div class="empty" style="padding:32px;">
+      <div class="empty-icon" style="font-size:28px;">📉</div>
+      <div class="empty-title">No CLO data yet</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- PLO Attainment -->
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">🎯 PLO Attainment</div>
+        <div style="font-size:11px;color:var(--gray);margin-top:2px;">
+          {{ selected_course.code }}, {{ selected_course.semester }}
+        </div>
+      </div>
+      <span style="font-size:11px;color:var(--gray);background:#fff9c4;border:1px solid #f0e068;border-radius:5px;padding:2px 8px;">
+        Threshold: 60%
+      </span>
+    </div>
+    {% if plo_attainment_list %}
+    <div style="position:relative;height:220px;padding-top:8px;">
+      <canvas id="escarPloChart"></canvas>
+    </div>
+    <div id="escarPloLegend" style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;padding:10px 0 2px;"></div>
+    {% else %}
+    <div class="empty" style="padding:32px;">
+      <div class="empty-icon" style="font-size:28px;">📉</div>
+      <div class="empty-title">No PLO data yet</div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endif %}
+
 <!-- CLO Attainment Per Student (Line Chart) -->
 <div class="panel" style="margin-bottom:20px;">
   <div class="panel-head">
@@ -56,23 +115,86 @@
   {% endif %}
 </div>
 
-<!-- PLO Attainment (Vertical Bar Chart with Gradient) -->
+
+<!-- Individual Student CLO-PLO Attainment Table -->
+{% if student_clo_plo_table %}
 <div class="panel" style="margin-bottom:20px;">
   <div class="panel-head">
-    <div class="panel-title">🎯 PLO Attainment</div>
-    <span style="font-size:12px;color:var(--gray);">Aggregated across all graded submissions</span>
+    <div class="panel-title">📋 Individual Student CLO-PLO Attainment</div>
+    <span style="font-size:12px;color:var(--gray);">{{ selected_course.code }} — raw marks, percentages and Yes/No attainment per CLO &amp; PLO</span>
   </div>
-  {% if plo_attainment_list %}
-  <div style="position:relative;height:300px;padding-top:8px;">
-    <canvas id="ploBarChart"></canvas>
+  <div style="overflow-x:auto;">
+  <table style="border-collapse:collapse;font-size:11px;white-space:nowrap;">
+
+    <!-- Top-level group headers -->
+    <tr>
+      <td rowspan="3" style="border:1px solid #aaa;background:#e6b800;text-align:center;font-weight:700;padding:6px 10px;">ID</td>
+      <td rowspan="3" style="border:1px solid #aaa;background:#e6b800;text-align:center;font-weight:700;padding:6px 10px;">Name</td>
+      {% if course_clos_list %}
+      <td colspan="{{ course_clos_list|length }}" style="border:1px solid #aaa;background:#ffe066;text-align:center;font-weight:700;padding:5px 8px;">Raw marks of CLOs</td>
+      {% endif %}
+      {% if course_plos_list %}
+      <td colspan="{{ course_plos_list|length }}" style="border:1px solid #aaa;background:#ffe066;text-align:center;font-weight:700;padding:5px 8px;">Raw marks of PLOs</td>
+      {% endif %}
+      {% if course_clos_list %}
+      <td colspan="{{ course_clos_list|length }}" style="border:1px solid #aaa;background:#ffe066;text-align:center;font-weight:700;padding:5px 8px;">% Marks of CLOs</td>
+      {% endif %}
+      {% if course_plos_list %}
+      <td colspan="{{ course_plos_list|length }}" style="border:1px solid #aaa;background:#ffe066;text-align:center;font-weight:700;padding:5px 8px;">% Marks of PLOs</td>
+      {% endif %}
+      {% if course_clos_list %}
+      <td colspan="{{ course_clos_list|length }}" style="border:1px solid #aaa;background:#ffe066;text-align:center;font-weight:700;padding:5px 8px;">Attainment of CLOs</td>
+      {% endif %}
+      {% if course_plos_list %}
+      <td colspan="{{ course_plos_list|length }}" style="border:1px solid #aaa;background:#ffe066;text-align:center;font-weight:700;padding:5px 8px;">Attainment of PLOs</td>
+      {% endif %}
+    </tr>
+
+    <!-- CLO/PLO code sub-headers -->
+    <tr>
+      {% for c in clo_max_marks_list %}<td style="border:1px solid #aaa;background:#fff9c4;text-align:center;font-weight:600;padding:4px 8px;">{{ c.code }}</td>{% endfor %}
+      {% for p in plo_max_marks_list %}<td style="border:1px solid #aaa;background:#fff9c4;text-align:center;font-weight:600;padding:4px 8px;">{{ p.code }}</td>{% endfor %}
+      {% for c in clo_max_marks_list %}<td style="border:1px solid #aaa;background:#fff9c4;text-align:center;font-weight:600;padding:4px 8px;">{{ c.code }}</td>{% endfor %}
+      {% for p in plo_max_marks_list %}<td style="border:1px solid #aaa;background:#fff9c4;text-align:center;font-weight:600;padding:4px 8px;">{{ p.code }}</td>{% endfor %}
+      {% for c in course_clos_list %}<td style="border:1px solid #aaa;background:#fff9c4;text-align:center;font-weight:600;padding:4px 8px;">{{ c.code }}</td>{% endfor %}
+      {% for p in course_plos_list %}<td style="border:1px solid #aaa;background:#fff9c4;text-align:center;font-weight:600;padding:4px 8px;">{{ p.code }}</td>{% endfor %}
+    </tr>
+
+    <!-- Max marks / 100 / Y/N row -->
+    <tr>
+      {% for c in clo_max_marks_list %}<td style="border:1px solid #aaa;background:#fffde7;text-align:center;padding:3px 6px;font-size:10px;">{{ c.max }}</td>{% endfor %}
+      {% for p in plo_max_marks_list %}<td style="border:1px solid #aaa;background:#fffde7;text-align:center;padding:3px 6px;font-size:10px;">{{ p.max }}</td>{% endfor %}
+      {% for c in clo_max_marks_list %}<td style="border:1px solid #aaa;background:#fffde7;text-align:center;padding:3px 6px;font-size:10px;">100.00</td>{% endfor %}
+      {% for p in plo_max_marks_list %}<td style="border:1px solid #aaa;background:#fffde7;text-align:center;padding:3px 6px;font-size:10px;">100.00</td>{% endfor %}
+      {% for c in course_clos_list %}<td style="border:1px solid #aaa;background:#fffde7;text-align:center;padding:3px 6px;font-size:10px;">Y/N</td>{% endfor %}
+      {% for p in course_plos_list %}<td style="border:1px solid #aaa;background:#fffde7;text-align:center;padding:3px 6px;font-size:10px;">Y/N</td>{% endfor %}
+    </tr>
+
+    <!-- Data rows -->
+    {% for row in student_clo_plo_table %}
+    <tr style="background:{% cycle '#ffffff' '#f9fafb' %};">
+      <td style="border:1px solid #ddd;text-align:center;padding:4px 8px;">{{ row.student_id }}</td>
+      <td style="border:1px solid #ddd;padding:4px 8px;">{{ row.name }}</td>
+      {% for c in row.clos %}<td style="border:1px solid #ddd;text-align:center;padding:4px 8px;">{{ c.raw }}</td>{% endfor %}
+      {% for p in row.plos %}<td style="border:1px solid #ddd;text-align:center;padding:4px 8px;">{{ p.raw }}</td>{% endfor %}
+      {% for c in row.clos %}<td style="border:1px solid #ddd;text-align:center;padding:4px 8px;">{{ c.pct }}</td>{% endfor %}
+      {% for p in row.plos %}<td style="border:1px solid #ddd;text-align:center;padding:4px 8px;">{{ p.pct }}</td>{% endfor %}
+      {% for c in row.clos %}<td style="border:1px solid #ddd;text-align:center;padding:4px 8px;font-weight:700;{% if c.attained %}color:#166534;background:#dcfce7;{% else %}color:#991b1b;background:#fee2e2;{% endif %}">{% if c.attained %}Yes{% else %}No{% endif %}</td>{% endfor %}
+      {% for p in row.plos %}<td style="border:1px solid #ddd;text-align:center;padding:4px 8px;font-weight:700;{% if p.attained %}color:#166534;background:#dcfce7;{% else %}color:#991b1b;background:#fee2e2;{% endif %}">{% if p.attained %}Yes{% else %}No{% endif %}</td>{% endfor %}
+    </tr>
+    {% endfor %}
+
+    <!-- Footer note -->
+    <tr>
+      <td colspan="100" style="background:#ffe680;text-align:center;font-size:11px;padding:7px;font-weight:700;border:1px solid #d1d5db;">
+        ProPLOsed passing marks of CLO and PLO is 40% (*Passing marks of CLO-PLO should be based on the decision of the Academic Council of the University)
+      </td>
+    </tr>
+
+  </table>
   </div>
-  {% else %}
-  <div class="empty" style="padding:32px;">
-    <div class="empty-icon" style="font-size:28px;">📉</div>
-    <div class="empty-title">No PLOs mapped yet</div>
-  </div>
-  {% endif %}
 </div>
+{% endif %}
 
 <!-- Weak students -->
 {% if weak_students %}
@@ -109,6 +231,7 @@ const GRADE_DIST       = {{ grade_dist|safe }};
 const INTEGRITY_DATA   = {{ integrity_data|safe }};
 const STUDENT_CLO_DATA = {{ student_clo_data|safe }};
 const PLO_ATTAINMENT   = {{ plo_attainment|safe }};
+const CLO_ATTAINMENT   = {{ clo_attainment|safe }};
 
 /* ── Grade Distribution ── */
 if (document.getElementById('gradeChart')) {
@@ -202,72 +325,85 @@ if (document.getElementById('studentCloChart') && STUDENT_CLO_DATA.length) {
   });
 }
 
-/* ── PLO Attainment (Vertical Bar with gradient, demo-2 style) ── */
-if (document.getElementById('ploBarChart') && PLO_ATTAINMENT.length) {
-  const ctx = document.getElementById('ploBarChart').getContext('2d');
-  const grad = ctx.createLinearGradient(0, 0, 0, 270);
-  grad.addColorStop(0, 'rgba(16,185,129,0.92)');
-  grad.addColorStop(1, 'rgba(16,185,129,0.18)');
+/* ── eSCAR palette ── */
+const ESCAR_PALETTE = [
+  '#4472c4','#ed7d31','#70ad47','#7030a0','#00b0f0',
+  '#ffc000','#ff0000','#00b050','#0070c0','#843c0c'
+];
 
-  new Chart(ctx, {
+function buildEscarChart(canvasId, legendId, data, titleFn) {
+  const el = document.getElementById(canvasId);
+  const leg = document.getElementById(legendId);
+  if (!el || !data.length) return;
+
+  const colors = data.map((_, i) => ESCAR_PALETTE[i % ESCAR_PALETTE.length]);
+
+  /* Build HTML legend matching the image style */
+  data.forEach((d, i) => {
+    const span = document.createElement('span');
+    span.style.cssText = 'display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#374151;';
+    span.innerHTML = `<span style="display:inline-block;width:13px;height:13px;background:${colors[i]};border-radius:2px;flex-shrink:0;"></span>${d.code}`;
+    leg.appendChild(span);
+  });
+
+  new Chart(el, {
     type: 'bar',
     data: {
-      labels: PLO_ATTAINMENT.map(p => p.code),
+      labels: data.map(d => d.code),
       datasets: [{
-        label: 'PLO Attainment',
-        data: PLO_ATTAINMENT.map(p => p.attainment),
-        backgroundColor: grad,
-        borderRadius: { topLeft: 7, topRight: 7 },
-        borderSkipped: 'bottom',
+        data: data.map(d => d.attainment),
+        backgroundColor: colors,
+        borderRadius: 0,
+        borderSkipped: false,
         barPercentage: 0.55,
+        categoryPercentage: 0.75,
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      layout: { padding: { top: 32, right: 16 } },
+      layout: { padding: { top: 8, right: 8 } },
       plugins: {
         legend: { display: false },
+        datalabels: { display: false },
         tooltip: {
           callbacks: {
-            title: items => {
-              const idx = items[0].dataIndex;
-              return PLO_ATTAINMENT[idx].code + ': ' + PLO_ATTAINMENT[idx].description;
-            },
-            label: ctx => ' ' + ctx.raw + '%'
+            title: items => titleFn ? titleFn(items[0].dataIndex) : data[items[0].dataIndex].code,
+            label: ctx => ` ${ctx.raw}%`,
           }
         },
-        datalabels: {
-          anchor: 'end',
-          align: 'end',
-          offset: 4,
-          formatter: v => v + '%',
-          font: { size: 12, weight: '700' },
-          color: '#065f46',
-        }
       },
       scales: {
         y: {
           min: 0,
-          max: 115,
+          max: 100,
           ticks: {
-            callback: v => v > 100 ? '' : v + '%',
+            stepSize: 25,
+            callback: v => v,
             font: { size: 11 },
             color: '#6b7280',
-            stepSize: 20,
           },
-          grid: { color: '#f3f4f6' },
+          grid: { color: '#e0e0e0' },
           border: { display: false },
         },
         x: {
-          ticks: { font: { size: 12, weight: '600' }, color: '#374151' },
+          ticks: { font: { size: 11, weight: '600' }, color: '#374151' },
           grid: { display: false },
-          border: { display: false },
+          border: { color: '#9e9e9e', width: 1 },
         }
       }
-    },
-    plugins: [ChartDataLabels]
+    }
   });
 }
+
+if (CLO_ATTAINMENT.length) {
+  buildEscarChart('escarCloChart', 'escarCloLegend', CLO_ATTAINMENT, null);
+}
+if (PLO_ATTAINMENT.length) {
+  buildEscarChart('escarPloChart', 'escarPloLegend', PLO_ATTAINMENT,
+    i => `${PLO_ATTAINMENT[i].code}${PLO_ATTAINMENT[i].description ? ': ' + PLO_ATTAINMENT[i].description : ''}`
+  );
+}
+
 </script>
 {% endblock %}

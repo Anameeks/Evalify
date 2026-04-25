@@ -1,0 +1,284 @@
+{% extends 'faculty/base.html' %}
+{% block nav_escar %}active{% endblock %}
+
+{% block content %}
+<div class="page-title">eSCAR Report</div>
+<div class="page-sub">End Semester Course Assessment Report — CLO &amp; PLO attainment overview for course teachers.</div>
+
+<!-- Course selector -->
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap;">
+  <span style="font-size:13px;font-weight:600;color:var(--gray);">Course:</span>
+  <form method="get" style="display:flex;gap:8px;align-items:center;">
+    <select name="course" class="form-control" style="width:300px;" onchange="this.form.submit()">
+      {% for c in courses %}
+      <option value="{{ c.id }}" {% if selected_course and selected_course.id == c.id %}selected{% endif %}>
+        {{ c.code }}: {{ c.name }}
+      </option>
+      {% endfor %}
+    </select>
+  </form>
+  {% if selected_course %}
+  <button class="btn btn-outline btn-sm" onclick="window.print()" style="margin-left:auto;">🖨 Print / Save PDF</button>
+  {% endif %}
+</div>
+
+{% if not courses %}
+<div class="empty">
+  <div class="empty-icon"></div>
+  <div class="empty-title">No courses found</div>
+  <div style="font-size:13px;color:var(--light);margin-top:4px;">Create a course first to generate eSCAR reports.</div>
+</div>
+
+{% elif selected_course %}
+
+<!-- eSCAR Report Table -->
+<div id="escar-wrapper" style="overflow-x:auto;margin-bottom:24px;">
+<table id="escar-table" style="width:100%;border-collapse:collapse;font-size:13px;min-width:900px;">
+
+  <!-- Main header -->
+  <tr>
+    <td colspan="10" style="background:#1a5c5a;color:#fff;text-align:center;font-weight:700;font-size:14px;padding:10px 8px;border:1px solid #145250;">
+      End Semester Course Assessment Report (eSCAR), {{ selected_course.code }}, Department of CSE, UAP
+    </td>
+  </tr>
+
+  <!-- Course info header -->
+  <tr>
+    <td colspan="10" style="background:#e6b800;color:#1a1a1a;text-align:center;font-weight:600;font-size:13px;padding:8px;border:1px solid #c9a200;">
+      Course: {{ selected_course.name }}, {{ selected_course.code }},
+      Semester: {{ selected_course.semester }},
+      Course Lecturer: {{ selected_course.faculty.full_name|default:selected_course.faculty.username }}
+    </td>
+  </tr>
+
+  <!-- Student counts -->
+  <tr>
+    <td colspan="8" style="padding:7px 10px;border:1px solid #d1d5db;background:#fff;font-size:13px;">
+      Total number of students in this course (The students who participated in final exam)
+    </td>
+    <td colspan="2" style="padding:7px 10px;border:1px solid #d1d5db;background:#fff;text-align:center;font-weight:700;">
+      {{ total_participated }}
+    </td>
+  </tr>
+
+  <!-- Section headers: eSCAR of CLOs | eSCAR of PLOs -->
+  <tr>
+    <td colspan="5" style="background:#4caf7d;color:#fff;text-align:center;font-weight:700;padding:8px;border:1px solid #3a9463;">
+      eSCAR of CLOs
+    </td>
+    <td colspan="5" style="background:#4caf7d;color:#fff;text-align:center;font-weight:700;padding:8px;border:1px solid #3a9463;">
+      eSCAR of PLOs
+    </td>
+  </tr>
+
+  <!-- Sub-section headers -->
+  <tr>
+    <td rowspan="2" style="background:#f4a7a3;text-align:center;font-weight:600;padding:7px 6px;border:1px solid #d1d5db;vertical-align:middle;font-size:12px;">
+      Course<br>Outcomes<br>(CLOs)
+    </td>
+    <td colspan="3" style="background:#f4a7a3;text-align:center;font-weight:600;padding:7px 6px;border:1px solid #d1d5db;font-size:12px;">
+      CLO attainments
+    </td>
+    <td rowspan="2" style="background:#f4a7a3;text-align:center;font-weight:600;padding:7px 6px;border:1px solid #d1d5db;vertical-align:middle;font-size:12px;min-width:160px;">
+      Action plan of non-attainable CLOs /<br>improve CLOs attainment in next semester
+    </td>
+    <td rowspan="2" style="background:#f4a7a3;text-align:center;font-weight:600;padding:7px 6px;border:1px solid #d1d5db;vertical-align:middle;font-size:12px;">
+      Program<br>Outcomes<br>(PLOs)
+    </td>
+    <td colspan="3" style="background:#f4a7a3;text-align:center;font-weight:600;padding:7px 6px;border:1px solid #d1d5db;font-size:12px;">
+      PLO attainments
+    </td>
+    <td rowspan="2" style="background:#f4a7a3;text-align:center;font-weight:600;padding:7px 6px;border:1px solid #d1d5db;vertical-align:middle;font-size:12px;min-width:160px;">
+      Action plan of non-attainable PLO
+    </td>
+  </tr>
+  <tr>
+    <td style="background:#f4a7a3;text-align:center;font-weight:600;padding:6px 4px;border:1px solid #d1d5db;font-size:11px;">No. of<br>students</td>
+    <td style="background:#f4a7a3;text-align:center;font-weight:600;padding:6px 4px;border:1px solid #d1d5db;font-size:11px;">%</td>
+    <td style="background:#f4a7a3;text-align:center;font-weight:600;padding:6px 4px;border:1px solid #d1d5db;font-size:11px;">Attain<br>ment</td>
+    <td style="background:#f4a7a3;text-align:center;font-weight:600;padding:6px 4px;border:1px solid #d1d5db;font-size:11px;">No. of<br>students</td>
+    <td style="background:#f4a7a3;text-align:center;font-weight:600;padding:6px 4px;border:1px solid #d1d5db;font-size:11px;">%</td>
+    <td style="background:#f4a7a3;text-align:center;font-weight:600;padding:6px 4px;border:1px solid #d1d5db;font-size:11px;">Attain<br>ment</td>
+  </tr>
+
+  <!-- Data rows -->
+  {% if rows %}
+    {% for row in rows %}
+    <tr>
+      <!-- CLO side -->
+      {% if row.clo %}
+      <td style="text-align:center;font-weight:600;padding:8px 6px;border:1px solid #d1d5db;background:#fff;white-space:nowrap;">{{ row.clo.code }}</td>
+      <td style="text-align:center;padding:8px 6px;border:1px solid #d1d5db;background:#fff;">{{ row.clo.students_passed }}</td>
+      <td style="text-align:center;padding:8px 6px;border:1px solid #d1d5db;background:#fff;">{{ row.clo.attainment_pct|floatformat:2 }}</td>
+      <td style="text-align:center;padding:8px 6px;border:1px solid #d1d5db;font-weight:700;
+          {% if row.clo.attained %}color:#166534;background:#dcfce7;{% else %}color:#991b1b;background:#fee2e2;{% endif %}">
+        {% if row.clo.attained %}Yes{% else %}No{% endif %}
+      </td>
+      <td style="padding:6px 8px;border:1px solid #d1d5db;background:#fafafa;vertical-align:top;">
+        <textarea
+          class="action-plan-input"
+          data-type="clo"
+          data-id="{{ row.clo.id }}"
+          data-course="{{ selected_course.id }}"
+          rows="3"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:5px;font-size:12px;padding:5px 7px;font-family:'Inter',sans-serif;resize:vertical;background:#fff;"
+          placeholder="Enter action plan..."
+        >{{ row.clo.action_plan }}</textarea>
+      </td>
+      {% else %}
+      <td colspan="5" style="border:1px solid #d1d5db;background:#fafafa;"></td>
+      {% endif %}
+
+      <!-- PLO side -->
+      {% if row.plo %}
+      <td style="text-align:center;font-weight:600;padding:8px 6px;border:1px solid #d1d5db;background:#fff;white-space:nowrap;">{{ row.plo.code }}</td>
+      <td style="text-align:center;padding:8px 6px;border:1px solid #d1d5db;background:#fff;">{{ row.plo.students_passed }}</td>
+      <td style="text-align:center;padding:8px 6px;border:1px solid #d1d5db;background:#fff;">{{ row.plo.attainment_pct|floatformat:2 }}</td>
+      <td style="text-align:center;padding:8px 6px;border:1px solid #d1d5db;font-weight:700;
+          {% if row.plo.attained %}color:#166534;background:#dcfce7;{% else %}color:#991b1b;background:#fee2e2;{% endif %}">
+        {% if row.plo.attained %}Yes{% else %}No{% endif %}
+      </td>
+      <td style="padding:6px 8px;border:1px solid #d1d5db;background:#fafafa;vertical-align:top;">
+        <textarea
+          class="action-plan-input"
+          data-type="plo"
+          data-id="{{ row.plo.id }}"
+          data-course="{{ selected_course.id }}"
+          rows="3"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:5px;font-size:12px;padding:5px 7px;font-family:'Inter',sans-serif;resize:vertical;background:#fff;"
+          placeholder="Enter action plan..."
+        >{{ row.plo.action_plan }}</textarea>
+      </td>
+      {% else %}
+      <td colspan="5" style="border:1px solid #d1d5db;background:#fafafa;"></td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  {% else %}
+  <tr>
+    <td colspan="10" style="text-align:center;padding:30px;color:#9ca3af;border:1px solid #d1d5db;background:#fafafa;">
+      No CLOs or graded submissions found for this course.
+    </td>
+  </tr>
+  {% endif %}
+
+  <!-- Empty spacer row -->
+  <tr>
+    <td colspan="10" style="height:10px;border:1px solid #d1d5db;background:#fff;"></td>
+  </tr>
+
+  <!-- Footer note -->
+  <tr>
+    <td colspan="10" style="background:#ffe680;color:#1a1a1a;text-align:center;font-weight:700;font-size:13px;padding:9px 8px;border:1px solid #d1d5db;">
+      ProPLOsed Attainment of CLO and PLO of the course = if 60% students pass the particular CLO and PLO
+    </td>
+  </tr>
+  <tr>
+    <td colspan="10" style="background:#fff;color:#374151;text-align:center;font-size:12px;padding:7px 8px;border:1px solid #d1d5db;font-style:italic;">
+      *Attainment marks should be based on the decision of the academic council of the University
+    </td>
+  </tr>
+
+</table>
+</div>
+
+<!-- Save action plans button -->
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:32px;">
+  <button class="btn btn-primary" id="save-plans-btn" onclick="saveAllPlans()">
+    💾 Save Action Plans
+  </button>
+  <span id="save-status" style="font-size:13px;color:var(--green);display:none;">✓ Saved successfully</span>
+  <span id="save-error" style="font-size:13px;color:var(--red);display:none;">✗ Error saving</span>
+</div>
+
+<!-- Summary stats -->
+<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px;">
+  <div class="g-stat">
+    <div>
+      <div class="g-stat-label">Enrolled Students</div>
+      <div class="g-stat-val">{{ total_enrolled }}</div>
+    </div>
+  </div>
+  <div class="g-stat">
+    <div>
+      <div class="g-stat-label">Participated in Assessments</div>
+      <div class="g-stat-val">{{ total_participated }}</div>
+    </div>
+  </div>
+  <div class="g-stat">
+    <div>
+      <div class="g-stat-label">Absent</div>
+      <div class="g-stat-val" style="color:var(--red);">{{ total_absent }}</div>
+    </div>
+  </div>
+  <div class="g-stat">
+    <div>
+      <div class="g-stat-label">Attainment Threshold</div>
+      <div class="g-stat-val" style="color:var(--teal);">60%</div>
+    </div>
+  </div>
+</div>
+
+{% else %}
+<div class="empty">
+  <div class="empty-icon"></div>
+  <div class="empty-title">Select a course to view the eSCAR report</div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+@media print {
+  .sidebar, .page-title, .page-sub, form, #save-plans-btn, #save-status, #save-error,
+  .g-stats, .g-stat, button { display: none !important; }
+  .main { margin-left: 0 !important; padding: 0 !important; }
+  #escar-wrapper { overflow: visible !important; }
+  #escar-table { font-size: 11px !important; }
+  .action-plan-input {
+    border: none !important;
+    resize: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+}
+</style>
+<script>
+async function saveAllPlans() {
+  const inputs = document.querySelectorAll('.action-plan-input');
+  const btn = document.getElementById('save-plans-btn');
+  const statusOk = document.getElementById('save-status');
+  const statusErr = document.getElementById('save-error');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  statusOk.style.display = 'none';
+  statusErr.style.display = 'none';
+
+  let allOk = true;
+  for (const input of inputs) {
+    const payload = {
+      course_id: parseInt(input.dataset.course),
+      type: input.dataset.type,
+      id: parseInt(input.dataset.id),
+      action_plan: input.value,
+    };
+    try {
+      const res = await apiPost("{% url 'save_escar_plan' %}", payload);
+      if (!res.success) allOk = false;
+    } catch {
+      allOk = false;
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = '💾 Save Action Plans';
+  if (allOk) {
+    statusOk.style.display = 'inline';
+    setTimeout(() => { statusOk.style.display = 'none'; }, 3000);
+  } else {
+    statusErr.style.display = 'inline';
+  }
+}
+</script>
+{% endblock %}
